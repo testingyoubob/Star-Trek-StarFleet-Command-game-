@@ -1,0 +1,2688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Starfleet Tactical — 3D Starship Combat</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --orange: #ff9c00; --peach: #ffcc99; --purple: #cc99cc; --blue: #9999ff; --sky: #66ccff;
+    --red: #cc5555; --tan: #ffcc66; --lav: #9977aa; --dark: #0b0b12;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #000; color: var(--peach);
+    font-family: 'Antonio', 'Arial Narrow', 'Roboto Condensed', sans-serif; user-select: none; }
+  #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #overlay { position: fixed; inset: 0; pointer-events: none; }
+  .hidden { display: none !important; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .panel { position: absolute; width: 250px; background: rgba(4, 4, 10, 0.62); border-left: 14px solid var(--orange);
+    border-radius: 22px 0 0 22px; padding: 0 12px 10px 12px; backdrop-filter: blur(3px); }
+  .panel .head { background: var(--orange); color: #000; font-weight: 700; letter-spacing: 2px; font-size: 17px;
+    padding: 2px 10px; margin: 0 -12px 6px -12px; border-radius: 0 14px 14px 0; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panel.purple { border-color: var(--purple); } .panel.purple .head { background: var(--purple); }
+  .panel.blue { border-color: var(--blue); } .panel.blue .head { background: var(--blue); }
+  .panel.red { border-color: var(--red); } .panel.red .head { background: var(--red); }
+  .panel .sub { font-size: 13px; letter-spacing: 1.5px; color: var(--tan); margin: 2px 0 6px; text-transform: uppercase; }
+  .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; font-size: 14px; letter-spacing: 1px; }
+  .row label { width: 78px; color: var(--peach); }
+  .row .num { width: 44px; text-align: right; color: #fff; }
+  .bar { flex: 1; height: 11px; background: #1d1d28; border-radius: 6px; overflow: hidden; }
+  .bar > div { height: 100%; width: 100%; background: var(--orange); border-radius: 6px; transition: width .12s linear; }
+  #hud-ship { left: 14px; top: 14px; }
+  #hud-power { left: 14px; bottom: 14px; }
+  #hud-weapons { right: 14px; bottom: 14px; width: 270px; }
+  #hud-target { right: 14px; top: 14px; width: 270px; }
+  .systems { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .sys { display: flex; justify-content: space-between; background: #1a1a26; border-radius: 8px; padding: 2px 8px; font-size: 12px; letter-spacing: 1px; }
+  .sys b { color: #8fd; font-weight: 600; } .sys.warn b { color: var(--tan); } .sys.crit b { color: #f65; }
+  .mode { justify-content: center; color: #000; }
+  .mode span { background: var(--purple); border-radius: 10px; padding: 1px 12px; font-weight: 700; letter-spacing: 2px; }
+  .keys { font-size: 11px; color: #998; letter-spacing: 1px; margin-top: 4px; }
+  #radar-wrap { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); }
+  #log { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: min(620px, 46vw); text-align: center; }
+  .msg { font-size: 17px; letter-spacing: 1.5px; margin-top: 3px; color: var(--peach); text-shadow: 0 0 6px #000, 0 0 3px #000; transition: opacity 1.2s; }
+  .msg.red { color: #ff7766; } .msg.blue { color: #8ad0ff; } .msg.gold { color: var(--tan); } .msg.green { color: #8f8; }
+  .msg.fade { opacity: 0; }
+  #banner { position: absolute; top: 26%; left: 0; right: 0; text-align: center; pointer-events: none; opacity: 0; transition: opacity .5s; }
+  #banner .big { font-size: 64px; font-weight: 700; letter-spacing: 12px; color: #ff4433; text-shadow: 0 0 24px rgba(255,60,40,.8); }
+  #banner .small { font-size: 22px; letter-spacing: 6px; color: var(--peach); }
+  #banner.show { opacity: 1; }
+  #vignette { position: fixed; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(255,30,10,0.55) 100%); }
+  #keys-hint { position: absolute; left: 50%; transform: translateX(-50%); top: 218px; font-size: 12px; letter-spacing: 2px; color: #887; }
+
+  /* ---------- Menu / screens ---------- */
+  .screen { position: fixed; inset: 0; display: flex; align-items: stretch; pointer-events: auto; }
+  #menu { background: linear-gradient(90deg, rgba(0,0,0,.92) 0%, rgba(0,0,0,.8) 44%, rgba(0,0,0,0) 62%); }
+  .lcars { width: min(700px, 58vw); margin: 26px 0 26px 26px; display: grid; grid-template-columns: 120px 1fr; grid-template-rows: auto 1fr auto; gap: 8px; }
+  .elbow-top { grid-column: 1; grid-row: 1; background: var(--orange); border-radius: 50px 0 0 0; min-height: 70px; }
+  .title-bar { grid-column: 2; grid-row: 1; display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 18px solid var(--orange); padding: 0 6px 6px 10px; }
+  .title-bar h1 { font-size: 46px; letter-spacing: 6px; color: var(--orange); line-height: 1; }
+  .title-bar .sd { font-size: 16px; letter-spacing: 3px; color: var(--purple); }
+  .side { grid-column: 1; grid-row: 2; display: flex; flex-direction: column; gap: 8px; }
+  .side div { background: var(--purple); color: #000; font-size: 13px; text-align: right; padding: 18px 8px 4px; letter-spacing: 1px; font-weight: 600; }
+  .side div:nth-child(2) { background: var(--blue); } .side div:nth-child(3) { background: var(--tan); flex: 1; } .side div:nth-child(4) { background: var(--red); }
+  .elbow-bot { grid-column: 1; grid-row: 3; background: var(--lav); border-radius: 0 0 0 50px; min-height: 50px; }
+  .foot { grid-column: 2; grid-row: 3; border-top: 18px solid var(--lav); display: flex; align-items: center; justify-content: space-between; padding: 6px 6px 0 10px; }
+  .body { grid-column: 2; grid-row: 2; overflow-y: auto; padding: 4px 6px 4px 10px; }
+  .body h3 { font-size: 18px; letter-spacing: 4px; color: var(--tan); margin: 10px 0 6px; }
+  .cat-h { font-size: 13px; letter-spacing: 2.5px; color: var(--purple); margin: 8px 0 4px; text-transform: uppercase; border-left: 6px solid var(--purple); padding-left: 8px; }
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 4px; }
+  .card { background: #15151f; border: 2px solid #2a2a3a; border-radius: 12px; padding: 6px 9px; cursor: pointer; transition: all .15s; }
+  .card:hover { border-color: var(--purple); }
+  .card.sel { border-color: var(--orange); background: #241a0a; }
+  .card .n { font-size: 16px; color: var(--orange); letter-spacing: 1px; }
+  .card .c { font-size: 11px; color: var(--peach); letter-spacing: 1px; }
+  .missions { display: flex; flex-direction: column; gap: 6px; }
+  .mission { background: #15151f; border-radius: 0 20px 20px 0; border-left: 10px solid var(--blue); padding: 6px 12px; cursor: pointer; transition: all .15s; }
+  .mission:hover { background: #1e1e2e; } .mission.sel { border-left-color: var(--orange); background: #241a0a; }
+  .mission .n { font-size: 17px; letter-spacing: 2px; color: var(--sky); } .mission.sel .n { color: var(--orange); }
+  .mission .d { font-size: 13px; color: #ccb; letter-spacing: .5px; }
+  .pills { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { background: #2a2a3a; color: var(--peach); border-radius: 16px; padding: 4px 16px; cursor: pointer; letter-spacing: 2px; font-size: 15px; }
+  .pill.sel { background: var(--orange); color: #000; font-weight: 700; }
+  .btn { background: var(--orange); color: #000; border: none; font-family: inherit; font-weight: 700; letter-spacing: 4px; font-size: 22px;
+    padding: 8px 34px; border-radius: 24px; cursor: pointer; transition: filter .15s; }
+  .btn:hover { filter: brightness(1.2); } .btn.alt { background: var(--purple); } .btn.red { background: var(--red); }
+  .btn.sm { font-size: 14px; padding: 5px 16px; letter-spacing: 2px; }
+  #shipinfo { position: fixed; right: 24px; bottom: 24px; width: 340px; background: rgba(5,5,12,.76); border-right: 14px solid var(--blue); border-radius: 0 22px 22px 0; padding: 10px 14px; pointer-events: none; }
+  #shipinfo .n { font-size: 25px; color: var(--sky); letter-spacing: 2px; }
+  #shipinfo .c { font-size: 13px; color: var(--tan); letter-spacing: 2px; margin-bottom: 6px; }
+  #shipinfo table { width: 100%; font-size: 13px; letter-spacing: .5px; border-collapse: collapse; }
+  #shipinfo td { padding: 1px 0; vertical-align: top; } #shipinfo td:first-child { color: var(--purple); width: 92px; }
+  #shipinfo .stat { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 3px 0; } #shipinfo .stat span { width: 82px; color: var(--peach); }
+  .opt { font-size: 15px; letter-spacing: 1px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+  .overlay-screen { position: fixed; inset: 0; background: rgba(0,0,0,.76); display: flex; align-items: center; justify-content: center; pointer-events: auto; z-index: 20; }
+  .box { width: min(900px, 94vw); max-height: 90vh; overflow-y: auto; background: #07070d; border-left: 18px solid var(--orange); border-radius: 36px 0 0 36px; padding: 0 22px 18px; }
+  .box .head { background: var(--orange); color: #000; font-weight: 700; letter-spacing: 5px; font-size: 26px; padding: 4px 16px; margin: 0 -22px 12px; border-radius: 0 20px 20px 0; }
+  .box.win { border-color: #6c6; } .box.win .head { background: #6c6; }
+  .box.lose { border-color: var(--red); } .box.lose .head { background: var(--red); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 22px; font-size: 15px; letter-spacing: 1px; }
+  .grid2 b { color: var(--tan); display: inline-block; min-width: 120px; font-weight: 600; }
+  .kb-row { display: flex; align-items: center; justify-content: space-between; background: #141420; border: 1px solid #28283a; border-radius: 10px; padding: 4px 10px; }
+  .kb-row span { color: var(--peach); font-size: 14px; letter-spacing: 1px; }
+  .kb-btn { background: #262638; color: var(--orange); border: 1.5px solid var(--purple); border-radius: 8px; font-family: inherit; font-size: 14px; font-weight: 700; letter-spacing: 1.5px; padding: 2px 12px; min-width: 90px; text-align: center; cursor: pointer; transition: all .12s; }
+  .kb-btn:hover { background: #342840; border-color: var(--orange); }
+  .kb-btn.wait { background: var(--orange); color: #000; border-color: #fff; animation: pulse .7s infinite alternate; }
+  @keyframes pulse { from { filter: brightness(1); } to { filter: brightness(1.35); } }
+  .box p { font-size: 15px; line-height: 1.45; color: #ddc; margin: 6px 0; letter-spacing: .4px; }
+  .box h4 { color: var(--sky); letter-spacing: 3px; margin: 12px 0 6px; font-size: 17px; display: flex; align-items: center; justify-content: space-between; }
+  .btnrow { display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; }
+  .stats { font-size: 20px; letter-spacing: 2px; line-height: 1.7; }
+  .stats span { color: var(--tan); }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; background: #000; color: var(--orange); font-size: 28px; letter-spacing: 8px; z-index: 50; }
+  #loading small { font-size: 14px; color: var(--peach); letter-spacing: 2px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<canvas id="overlay"></canvas>
+<div id="vignette"></div>
+
+<div id="hud" class="hidden">
+  <div id="hud-ship" class="panel">
+    <div class="head" id="ship-name">U.S.S. ENTERPRISE</div>
+    <div class="sub" id="ship-class">CONSTITUTION CLASS</div>
+    <div class="row"><label>HULL</label><div class="bar"><div id="hull-bar"></div></div><span class="num" id="hull-txt">100%</span></div>
+    <canvas id="shield-canvas" width="226" height="170"></canvas>
+    <div class="systems">
+      <div class="sys" id="sys-phasers"><span>WEAPONS</span><b>100%</b></div>
+      <div class="sys" id="sys-torpedoes"><span>TORP BAYS</span><b>100%</b></div>
+      <div class="sys" id="sys-engines"><span>ENGINES</span><b>100%</b></div>
+      <div class="sys" id="sys-shields"><span>SHIELD GEN</span><b>100%</b></div>
+    </div>
+  </div>
+  <div id="hud-power" class="panel purple">
+    <div class="head">Power · Helm</div>
+    <div class="row"><label>WEAPONS</label><div class="bar"><div id="pw-w"></div></div></div>
+    <div class="row"><label>SHIELDS</label><div class="bar"><div id="pw-s"></div></div></div>
+    <div class="row"><label>ENGINES</label><div class="bar"><div id="pw-e"></div></div></div>
+    <div class="row mode"><span id="pw-mode">BALANCED</span></div>
+    <div class="row"><label>IMPULSE</label><div class="bar"><div id="thr-bar"></div></div><span class="num" id="spd-txt">0</span></div>
+    <div class="sub" id="thr-txt">ALL STOP</div>
+    <div class="keys" id="hud-keys-helm">1 BAL · 2 WEAP · 3 SHLD · 4 ENG &nbsp;|&nbsp; E/Q THROTTLE · X STOP</div>
+  </div>
+  <div id="hud-weapons" class="panel blue">
+    <div class="head">Tactical</div>
+    <div class="row"><label id="w1-name">PHASERS</label><div class="bar"><div id="w1-bar"></div></div></div>
+    <div class="row"><label id="w2-name">TORPEDO</label><div class="bar"><div id="w2-bar"></div></div><span class="num" id="w2-ammo">0</span></div>
+    <div class="sub" id="arc-txt">NO TARGET</div>
+    <div class="keys" id="hud-keys-weap">SPACE FIRE · T/RMB TORPEDO · G SPECIAL · TAB/R TARGET</div>
+  </div>
+  <div id="hud-target" class="panel red">
+    <div class="head" id="tgt-name">NO TARGET</div>
+    <div class="sub" id="tgt-class">PRESS TAB OR R TO LOCK</div>
+    <div class="row"><label>HULL</label><div class="bar"><div id="tgt-hull"></div></div><span class="num" id="tgt-hull-txt"></span></div>
+    <canvas id="tgt-canvas" width="246" height="150"></canvas>
+    <div class="sub" id="tgt-info"></div>
+  </div>
+  <div id="radar-wrap"><canvas id="radar" width="200" height="200"></canvas></div>
+  <div id="keys-hint">H / ESC — PAUSE &amp; CONTROLS · B — CAMERA</div>
+  <div id="log"></div>
+  <div id="banner"><div class="big" id="banner-big"></div><div class="small" id="banner-small"></div></div>
+</div>
+
+<div id="menu" class="screen hidden">
+  <div class="lcars">
+    <div class="elbow-top"></div>
+    <div class="title-bar"><h1>STARFLEET TACTICAL</h1><div class="sd" id="stardate">STARDATE 47634.4</div></div>
+    <div class="side"><div>01-1701</div><div>02-74205</div><div>03-TAC</div><div>04-SIM</div></div>
+    <div class="body">
+      <h3>SELECT STARFLEET VESSEL</h3>
+      <div id="ship-cards"></div>
+      <h3>MISSION PROFILE (25 SCENARIOS)</h3>
+      <div class="missions" id="mission-list"></div>
+      <h3>DIFFICULTY</h3>
+      <div class="pills" id="diff-list"></div>
+    </div>
+    <div class="elbow-bot"></div>
+    <div class="foot">
+      <label class="opt"><input type="checkbox" id="opt-invert"> INVERT PITCH</label>
+      <div style="display:flex;gap:10px"><button class="btn alt" id="btn-help">CONTROLS &amp; BRIEFING</button><button class="btn" id="btn-start">ENGAGE</button></div>
+    </div>
+  </div>
+  <div id="shipinfo"></div>
+</div>
+
+<div id="help" class="overlay-screen hidden">
+  <div class="box">
+    <div class="head" id="help-title">PAUSED · CONTROLS &amp; TACTICAL BRIEFING</div>
+    <h4><span>KEYBOARD CONTROLS — CLICK ANY BUTTON TO REBIND</span><button class="btn alt sm" id="btn-reset-keys">RESET DEFAULTS</button></h4>
+    <div class="grid2" id="keybind-grid"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:14px;color:var(--peach);letter-spacing:1px;">
+      <label class="opt"><input type="checkbox" id="opt-invert-pause"> INVERT PITCH AXIS</label>
+      <span><b>1 2 3 4</b> Power Mode · <b>Mouse Drag / Wheel</b> Orbit / Zoom · <b>M</b> Mute · <b>H / ESC</b> Pause</span>
+    </div>
+    <h4>SHIELD FACINGS &amp; FIRING ARCS</h4>
+    <p>Like in <i>Star Fleet Battles</i> and <i>Starfleet Command</i>, your deflector grid is split into four facings: <b>fore, aft, port and starboard</b>. Incoming fire drains only the facing it strikes. Turn to present a fresh shield and let damaged facings regenerate. Each phaser bank, pulse cannon, and torpedo launcher checks its firing arc before firing.</p>
+    <h4>FLEET CLASSES &amp; SPECIAL TACTICS</h4>
+    <p><b>Frigates &amp; Escorts</b> (<i>Freedom, Nova, Defiant</i>) use speed and agility to outmaneuver capital ships. <b>Destroyers &amp; Medium Cruisers</b> (<i>Miranda, Akira, Steamrunner, Excelsior, Constitution</i>) balance hull strength with heavy torpedo pods. <b>Heavy Explorers</b> (<i>Intrepid, Galaxy, Sovereign, Prometheus</i>) command wide phaser arcs—and the <b>Prometheus Class</b> can press <b>SPECIAL (G)</b> to engage <b>Multi-Vector Assault Mode (MVAM)</b>, splitting into Alpha, Beta, and Gamma combat vectors! <b>Battlecruisers &amp; Dreadnoughts</b> (<i>Kirov, Inquiry</i>) unleash multi-torpedo salvos and combined phaser array + pulse cannon barrages.</p>
+    <div class="btnrow"><button class="btn red hidden" id="btn-abandon">ABANDON MISSION</button><button class="btn" id="btn-resume">RESUME</button></div>
+  </div>
+</div>
+
+<div id="endscreen" class="overlay-screen hidden">
+  <div class="box" id="end-box">
+    <div class="head" id="end-title">VICTORY</div>
+    <p id="end-text"></p>
+    <div class="stats" id="end-stats"></div>
+    <div class="btnrow"><button class="btn alt" id="btn-menu">MAIN MENU</button><button class="btn" id="btn-retry">RETRY MISSION</button></div>
+  </div>
+</div>
+
+<div id="loading">INITIALIZING TACTICAL SYSTEMS<small id="load-sub">Loading 3D engine…</small></div>
+<script>
+  setTimeout(() => { if (!window.__gameReady) document.getElementById('load-sub').textContent = 'Still loading… this game loads Three.js from the internet (cdn.jsdelivr.net). Check your connection.'; }, 9000);
+</script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* =====================================================================
+   UTILITIES
+   ===================================================================== */
+const V3 = THREE.Vector3;
+const DEG = Math.PI / 180;
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const lerp = (a, b, t) => a + (b - a) * t;
+const damp = (k, dt) => 1 - Math.exp(-k * dt);
+const randDir = () => { const u = rand(-1, 1), t = rand(0, Math.PI * 2), s = Math.sqrt(1 - u * u); return new V3(s * Math.cos(t), u, s * Math.sin(t)); };
+const $ = id => document.getElementById(id);
+const _t1 = new V3(), _t2 = new V3(), _t3 = new V3(), _t4 = new V3(), _t5 = new V3();
+const _q = new THREE.Quaternion(), _e = new THREE.Euler();
+
+let gameTime = 0, frameNo = 0, shake = 0;
+let state = 'loading';
+const ARENA = 4500;
+
+/* =====================================================================
+   RENDERER / SCENE
+   ===================================================================== */
+const canvas = $('game');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 1, 60000);
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.0, 0.55, 0.82);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+const overlay = $('overlay'); const octx = overlay.getContext('2d');
+
+function canvasTex(w, h, draw, srgb = true) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+const glowTex = canvasTex(128, 128, g => {
+  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.8)');
+  gr.addColorStop(0.45, 'rgba(255,255,255,0.22)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+});
+
+/* =====================================================================
+   ENVIRONMENT  (nebula sky, stars, sun, planet, space dust)
+   ===================================================================== */
+const env = new THREE.Group(); scene.add(env);
+const skyTex = canvasTex(2048, 1024, (g, W, H) => {
+  g.fillStyle = '#010104'; g.fillRect(0, 0, W, H);
+  const cols = [[90, 40, 140], [30, 60, 150], [160, 60, 90], [40, 110, 140], [150, 90, 40]];
+  for (let i = 0; i < 150; i++) {
+    const x = Math.random() * W, y = H * 0.5 + (Math.random() - 0.5) * H * 0.6 * Math.random();
+    const r = 60 + Math.random() * 280, c = pick(cols), a = 0.02 + Math.random() * 0.05;
+    for (const ox of [-W, 0, W]) {
+      const gr = g.createRadialGradient(x + ox, y, 0, x + ox, y, r);
+      gr.addColorStop(0, `rgba(${c[0]},${c[1]},${c[2]},${a})`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x + ox - r, y - r, 2 * r, 2 * r);
+    }
+  }
+  for (let i = 0; i < 6000; i++) { const b = Math.random(); g.fillStyle = `rgba(255,255,255,${b * b * 0.7})`; g.fillRect(Math.random() * W, Math.random() * H, 1, 1); }
+});
+skyTex.mapping = THREE.EquirectangularReflectionMapping;
+scene.background = skyTex;
+
+{ // bright point stars
+  const N = 3500, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const d = randDir().multiplyScalar(20000); pos.set([d.x, d.y, d.z], i * 3);
+    const b = 0.3 + Math.pow(Math.random(), 4) * 2.2; const tint = Math.random();
+    const c = tint < 0.2 ? [0.7, 0.8, 1] : tint < 0.35 ? [1, 0.85, 0.65] : [1, 1, 1];
+    col.set([c[0] * b, c[1] * b, c[2] * b], i * 3);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  env.add(new THREE.Points(g, new THREE.PointsMaterial({ size: 1.8, sizeAttenuation: false, vertexColors: true, depthWrite: false })));
+}
+
+const sunDir = new V3(0.6, 0.35, -0.7).normalize();
+const sunLight = new THREE.DirectionalLight(0xfff1dd, 3.6); sunLight.position.copy(sunDir).multiplyScalar(100); scene.add(sunLight);
+scene.add(new THREE.HemisphereLight(0x7088b8, 0x2a1e18, 0.75));
+{
+  const mk = (hex, k, size) => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(hex).multiplyScalar(k), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })); s.scale.set(size, size, 1); s.position.copy(sunDir).multiplyScalar(25000); env.add(s); };
+  mk(0xfff0d0, 4, 2600); mk(0xff9a50, 0.6, 11000);
+}
+const planetTex = canvasTex(1024, 512, (g, W, H) => {
+  g.fillStyle = '#183a72'; g.fillRect(0, 0, W, H);
+  g.filter = 'blur(5px)';
+  for (let i = 0; i < 80; i++) {
+    const x = Math.random() * W, y = H * 0.15 + Math.random() * H * 0.7, r = 15 + Math.random() * 80;
+    g.fillStyle = pick(['#3d6b35', '#56783a', '#8a7a4a', '#6b5a3a', '#2f5a30', '#9a8a5a']);
+    const rx = r * rand(1, 2.4), rot = Math.random() * 3;
+    for (const ox of [-W, 0, W]) { g.beginPath(); g.ellipse(x + ox, y, rx, r, rot, 0, Math.PI * 2); g.fill(); }
+  }
+  g.fillStyle = '#e8f0ff'; g.fillRect(0, 0, W, H * 0.06); g.fillRect(0, H * 0.94, W, H * 0.06);
+  g.filter = 'blur(9px)';
+  for (let i = 0; i < 120; i++) {
+    g.fillStyle = `rgba(255,255,255,${rand(0.15, 0.45)})`;
+    const x = Math.random() * W, y = Math.random() * H;
+    for (const ox of [-W, 0, W]) { g.beginPath(); g.ellipse(x + ox, y, rand(30, 120), rand(6, 20), rand(-0.3, 0.3), 0, Math.PI * 2); g.fill(); }
+  }
+});
+const planet = new THREE.Mesh(new THREE.SphereGeometry(2600, 64, 48), new THREE.MeshStandardMaterial({ map: planetTex, roughness: 0.92, metalness: 0 }));
+planet.position.set(-5600, -2000, 9500); scene.add(planet);
+const atmo = new THREE.Mesh(new THREE.SphereGeometry(2600 * 1.07, 64, 48), new THREE.ShaderMaterial({
+  uniforms: { uSun: { value: sunDir } },
+  vertexShader: `varying vec3 vN; varying vec3 vV; void main(){ vec4 wp = modelMatrix*vec4(position,1.0); vN = normalize(mat3(modelMatrix)*normal); vV = normalize(cameraPosition-wp.xyz); gl_Position = projectionMatrix*viewMatrix*wp; }`,
+  fragmentShader: `uniform vec3 uSun; varying vec3 vN; varying vec3 vV; void main(){ float f = pow(1.0-abs(dot(vN,vV)), 2.5); float l = clamp(dot(vN,uSun)*0.8+0.35, 0.0, 1.0); gl_FragColor = vec4(vec3(0.35,0.6,1.0)*f*l*1.4, f*l); }`,
+  blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.BackSide
+}));
+atmo.position.copy(planet.position); scene.add(atmo);
+
+// space dust that wraps around the camera to convey motion
+const DUST_N = 1400, DUST_R = 320;
+const dustPos = new Float32Array(DUST_N * 3);
+for (let i = 0; i < DUST_N * 3; i++) dustPos[i] = rand(-DUST_R, DUST_R);
+const dustGeo = new THREE.BufferGeometry(); dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.9, color: 0x8899bb, transparent: true, opacity: 0.55, depthWrite: false }));
+dust.frustumCulled = false; scene.add(dust);
+function updateEnv(dt) {
+  env.position.copy(camera.position);
+  planet.rotation.y += dt * 0.004;
+  const c = camera.position, D = DUST_R * 2;
+  for (let i = 0; i < DUST_N; i++) {
+    const k = i * 3;
+    for (let a = 0; a < 3; a++) {
+      const cc = a === 0 ? c.x : a === 1 ? c.y : c.z;
+      let d = dustPos[k + a] - cc;
+      if (d > DUST_R) dustPos[k + a] -= D; else if (d < -DUST_R) dustPos[k + a] += D;
+    }
+  }
+  dustGeo.attributes.position.needsUpdate = true;
+}
+
+/* =====================================================================
+   AUDIO  (all sounds synthesised with WebAudio — no files needed)
+   ===================================================================== */
+const sfx = {
+  ctx: null, master: null, muted: false,
+  init() {
+    if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+    const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
+    this.ctx = new C(); this.master = this.ctx.createGain(); this.master.gain.value = 0.5;
+    const comp = this.ctx.createDynamicsCompressor(); this.master.connect(comp); comp.connect(this.ctx.destination);
+    const len = this.ctx.sampleRate * 2, buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.noise = buf;
+  },
+  toggleMute() { this.muted = !this.muted; if (this.master) this.master.gain.value = this.muted ? 0 : 0.5; return this.muted; },
+  vol(pos) { if (!pos) return 1; const d = pos.distanceTo(camera.position); return Math.pow(clamp(1 - d / 3500, 0, 1), 2); },
+  tone(type, f0, f1, dur, vol, delay = 0) {
+    if (!this.ctx || vol < 0.002) return; const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + dur + 0.05);
+  },
+  noiseBurst(dur, vol, f0, f1, type = 'lowpass', q = 1, delay = 0) {
+    if (!this.ctx || vol < 0.002) return; const c = this.ctx, t = c.currentTime + delay;
+    const s = c.createBufferSource(); s.buffer = this.noise; s.loop = true;
+    const f = c.createBiquadFilter(); f.type = type; f.Q.value = q; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(this.master); s.start(t, Math.random()); s.stop(t + dur + 0.05);
+  },
+  explosion(pos, big) { const v = this.vol(pos); this.noiseBurst(big ? 2.8 : 1.3, (big ? 1 : 0.7) * v, big ? 1400 : 2200, 50); this.tone('sine', big ? 70 : 110, 25, big ? 2 : 0.9, 0.6 * v); },
+  torpedo(pos, plasma) { const v = this.vol(pos); if (plasma) { this.tone('sawtooth', 300, 60, 1.2, 0.2 * v); this.noiseBurst(1.0, 0.25 * v, 900, 120, 'lowpass', 3); } else { this.tone('sawtooth', 1500, 180, 0.6, 0.14 * v); this.tone('sine', 700, 90, 0.7, 0.3 * v); this.noiseBurst(0.4, 0.15 * v, 5000, 600, 'bandpass', 2); } },
+  disruptor(pos) { const v = this.vol(pos); this.tone('square', 560, 120, 0.22, 0.1 * v); this.noiseBurst(0.16, 0.08 * v, 3000, 700, 'bandpass', 3); },
+  pulsePhaser(pos) { const v = this.vol(pos); this.tone('sawtooth', 1500, 420, 0.16, 0.09 * v); this.tone('square', 900, 300, 0.12, 0.04 * v); },
+  shieldHit(pos) { const v = this.vol(pos); this.tone('sine', 320, 110, 0.25, 0.12 * v); this.noiseBurst(0.2, 0.08 * v, 2600, 600, 'bandpass', 4); },
+  cloak(pos) { const v = this.vol(pos); this.tone('sine', 180, 1500, 1.6, 0.08 * v); this.noiseBurst(1.6, 0.06 * v, 400, 5000, 'bandpass', 6); },
+  warp(pos) { const v = this.vol(pos) * 0.8 + 0.2; this.tone('sine', 2400, 90, 0.9, 0.12 * v); this.noiseBurst(0.9, 0.2 * v, 7000, 200, 'lowpass', 1); },
+  beep(f = 1250) { this.tone('sine', f, f, 0.09, 0.05); },
+  alarm() { this.tone('square', 880, 880, 0.12, 0.04); this.tone('square', 660, 660, 0.12, 0.04, 0.15); },
+  klaxon() { for (let i = 0; i < 3; i++) { this.tone('sawtooth', 360, 760, 0.6, 0.07, i * 0.8); this.tone('square', 365, 770, 0.6, 0.035, i * 0.8); } },
+  beamStart(pos) {
+    if (!this.ctx) return null; const c = this.ctx, t = c.currentTime;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(0.0002, 0.07 * this.vol(pos)), t + 0.05);
+    const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 1.2;
+    const o1 = c.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 820;
+    const o2 = c.createOscillator(); o2.type = 'square'; o2.frequency.value = 1236;
+    const lfo = c.createOscillator(); lfo.frequency.value = 28; const lg = c.createGain(); lg.gain.value = 60;
+    lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
+    o1.connect(f); o2.connect(f); f.connect(g); g.connect(this.master); o1.start(); o2.start(); lfo.start();
+    return {
+      setPos: p => g.gain.setTargetAtTime(Math.max(0.0002, 0.07 * this.vol(p)), c.currentTime, 0.05),
+      stop: () => { const n = c.currentTime; g.gain.cancelScheduledValues(n); g.gain.setTargetAtTime(0.0001, n, 0.04); o1.stop(n + 0.3); o2.stop(n + 0.3); lfo.stop(n + 0.3); }
+    };
+  }
+};
+
+/* =====================================================================
+   HULL TEXTURES  (procedural aztec plating + lit windows per faction)
+   ===================================================================== */
+const texCache = {};
+function hullTex(kind) {
+  if (texCache[kind]) return texCache[kind];
+  const W = 1024, H = 512;
+  const P = {
+    fed: { base: [186, 190, 200], v: 16, line: 'rgba(70,74,90,0.5)', win: ['#fff3c8', '#ffe8a8', '#ffffff', '#fff8e0'], dens: 0.55 },
+    kli: { base: [82, 92, 74], v: 24, line: 'rgba(18,22,16,0.75)', win: ['#ff7a3a', '#ffb060'], dens: 0.16 },
+    rom: { base: [92, 136, 100], v: 20, line: 'rgba(22,44,28,0.6)', win: ['#c8ff9a', '#8affc0'], dens: 0.22 },
+    car: { base: [164, 128, 72], v: 22, line: 'rgba(55,36,14,0.7)', win: ['#ffd070', '#ff9a30'], dens: 0.25 },
+    dom: { base: [118, 108, 152], v: 20, line: 'rgba(34,26,58,0.7)', win: ['#b8d8ff', '#d0a8ff'], dens: 0.2 },
+    brg: { base: [42, 48, 44], v: 28, line: 'rgba(10,25,14,0.9)', win: ['#30ff70', '#80ffaa'], dens: 0.45 },
+  }[kind];
+  const wins = [];
+  for (let y = 16; y < H - 6; y += 20 + Math.floor(Math.random() * 16)) {
+    let x = 0;
+    while (x < W) { const len = 20 + Math.random() * 120; if (Math.random() < P.dens) for (let xx = x; xx < x + len && xx < W - 4; xx += 7) wins.push([xx, y]); x += len + 10; }
+  }
+  const map = canvasTex(W, H, g => {
+    const [r, gg, b] = P.base; g.fillStyle = `rgb(${r},${gg},${b})`; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < 1000; i++) {
+      const v = (Math.random() - 0.5) * 2 * P.v; g.fillStyle = `rgba(${r + v | 0},${gg + v | 0},${b + v | 0},0.55)`;
+      g.fillRect(Math.random() * W, Math.random() * H, 6 + Math.random() * 60, 5 + Math.random() * 34);
+    }
+    g.strokeStyle = P.line; g.lineWidth = 1;
+    for (let i = 0; i < 280; i++) g.strokeRect(Math.random() * W, Math.random() * H, 10 + Math.random() * 90, 8 + Math.random() * 50);
+    if (kind === 'kli') for (let i = 0; i < 600; i++) { g.fillStyle = `rgba(${70 + Math.random() * 60 | 0},${30 + Math.random() * 20 | 0},20,0.2)`; g.fillRect(Math.random() * W, Math.random() * H, 4 + Math.random() * 30, 3 + Math.random() * 10); }
+    if (kind === 'rom') for (let i = 0; i < 260; i++) {
+      const x = Math.random() * W, y = Math.random() * H, s = 10 + Math.random() * 30;
+      g.strokeStyle = 'rgba(20,62,36,0.5)'; g.lineWidth = 2; g.beginPath(); g.moveTo(x - s, y - s * 0.6); g.lineTo(x, y); g.lineTo(x + s, y - s * 0.6); g.stroke();
+    }
+    if (kind === 'brg') for (let i = 0; i < 500; i++) {
+      g.strokeStyle = i % 5 === 0 ? 'rgba(40,255,110,0.35)' : 'rgba(15,20,16,0.85)'; g.lineWidth = i % 5 === 0 ? 1.5 : 2.5;
+      g.strokeRect(Math.random() * W, Math.random() * H, 8 + Math.random() * 70, 8 + Math.random() * 70);
+    }
+    g.fillStyle = 'rgba(20,20,30,0.8)'; wins.forEach(([x, y]) => g.fillRect(x, y, 4, 2.5));
+  });
+  const emis = canvasTex(W, H, g => {
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    wins.forEach(([x, y]) => { if (Math.random() < 0.85) { g.fillStyle = pick(P.win); g.fillRect(x, y, 4, 2.5); } });
+  });
+  [map, emis].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
+  return texCache[kind] = { map, emis };
+}
+function hullMat(kind, side = THREE.FrontSide) {
+  const t = hullTex(kind);
+  return new THREE.MeshStandardMaterial({ map: t.map, emissiveMap: t.emis, emissive: 0xffffff, emissiveIntensity: kind === 'fed' ? 1.5 : 1.3, metalness: 0.45, roughness: 0.5, side });
+}
+const glowMat = (hex, k = 2) => new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(k) });
+
+/* =====================================================================
+   GEOMETRY HELPERS
+   ===================================================================== */
+const Y_AXIS = new V3(0, 1, 0);
+function mesh(geo, mat, parent, p, r, s) {
+  const m = new THREE.Mesh(geo, mat);
+  if (p) m.position.set(p[0], p[1], p[2]); if (r) m.rotation.set(r[0], r[1], r[2]); if (s) m.scale.set(s[0], s[1], s[2]);
+  parent.add(m); return m;
+}
+const lathe = (pts, segs = 48) => new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), segs);
+function latheZ(pts, segs = 32) { const g = lathe(pts, segs); g.rotateX(Math.PI / 2); return g; }
+function capZ(r, theta, segs = 24) { const g = new THREE.SphereGeometry(r, segs, 12, 0, Math.PI * 2, 0, theta); g.rotateX(Math.PI / 2); return g; }
+function strut(parent, a, b, w, d, mat) {
+  const A = new V3(...a), B = new V3(...b), len = A.distanceTo(B);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, len, d), mat);
+  m.position.copy(A).add(B).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(Y_AXIS, B.clone().sub(A).normalize());
+  parent.add(m); return m;
+}
+// half: right-side outline from front-centre to rear-centre; returns the closed symmetric loop
+function mirror(half) {
+  const out = half.map(p => [p[0], p[1]]);
+  for (let i = half.length - 2; i >= 1; i--) out.push([-half[i][0], half[i][1]]);
+  return out;
+}
+function extrudeShape(pts, depth, bevel = 0.6, uvs = 1 / 50) {
+  const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]);
+  s.closePath();
+  const g = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 12 });
+  g.translate(0, 0, -depth / 2); g.rotateX(Math.PI / 2); // shape-y -> +Z (forward), extrusion -> vertical
+  const uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * uvs, uv.getY(i) * uvs);
+  return g;
+}
+
+/* =====================================================================
+   SHIP MODEL BUILDERS
+   Local frame: +Z = forward (bow), +Y = up (dorsal), +X = port, -X = starboard.
+   ===================================================================== */
+function newModel() {
+  const M = { group: new THREE.Group(), mounts: { beam: [], pulse: [], torp: [] }, engines: [], blinkers: [], pulsing: [] };
+  M.mount = (kind, parent, p, d, arcDeg) => { const o = new THREE.Object3D(); o.position.set(...p); parent.add(o); M.mounts[kind].push({ node: o, dir: new V3(...d).normalize(), arc: arcDeg * DEG }); };
+  M.engine = (parent, p, size, hex) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(hex).multiplyScalar(2.2), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    s.position.set(...p); s.scale.set(size, size, 1); s.userData.base = size; parent.add(s); M.engines.push(s);
+  };
+  M.blinker = (parent, p, hex, phase, size = 2.6) => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(hex).multiplyScalar(2.5), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    s.position.set(...p); s.scale.set(size, size, 1); s.userData.phase = phase; s.userData.base = size; parent.add(s); M.blinkers.push(s);
+  };
+  return M;
+}
+
+function buildConstitution() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xffb060, 2.2), bussard = glowMat(0xff5a2a, 2.6), warp = glowMat(0x4f8fff, 2.6), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  mesh(lathe([[0, -2.2], [5, -2.0], [14, -1.4], [19.5, -0.6], [21, -0.1], [21, 0.3], [19, 0.9], [12, 1.6], [6, 2.3], [3, 3.0], [0, 3.3]], 64), H, g, [0, 0, 14]);
+  mesh(new THREE.SphereGeometry(2.2, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 3.0, 14]);
+  mesh(new THREE.SphereGeometry(1.3, 16, 8), glowMat(0xffd080, 1.4), g, [0, -2.1, 14]);
+  mesh(new THREE.BoxGeometry(8, 1.6, 3), H, g, [0, 1.0, -5.5]);
+  mesh(new THREE.BoxGeometry(6.5, 1.0, 0.3), impulse, g, [0, 1.0, -7.05]);
+  M.engine(g, [0, 1.0, -7.6], 7, 0xff4020);
+  mesh(new THREE.BoxGeometry(2.6, 12, 6), H, g, [0, -5.5, -2], [0.785, 0, 0]);
+  mesh(latheZ([[0, -28], [2.6, -27.5], [3.8, -24], [4.6, -14], [4.8, -6], [4.5, -1], [3.9, 1.5], [3.5, 2.0]], 40), H, g, [0, -10, 0]);
+  mesh(capZ(4.2, 1.0), deflector, g, [0, -10, -0.3]);
+  mesh(new THREE.BoxGeometry(3, 2, 0.3), glowMat(0xffe0a0, 1.3), g, [0, -10, -27.9]);
+  for (const s of [1, -1]) {
+    strut(g, [1.5 * s, -9, -18], [11 * s, 1.5, -21], 1.0, 5, H);
+    mesh(latheZ([[0, -17], [1.8, -16.5], [2.3, -14], [2.3, 12], [2.0, 14.5]], 24), H, g, [11 * s, 2.5, -20]);
+    mesh(capZ(2.05, Math.PI / 2), bussard, g, [11 * s, 2.5, -5.5]);
+    mesh(new THREE.BoxGeometry(0.4, 1.3, 22), warp, g, [(11 - 2.2) * s, 2.5, -21]);
+    M.blinker(g, [11 * s, 2.5, -37.5], 0xffffff, s > 0 ? 0 : 0.5, 2);
+  }
+  M.blinker(g, [21, 0.1, 14], 0xff2020, 0); M.blinker(g, [-21, 0.1, 14], 0x20ff40, 0);
+  M.mount('beam', g, [0, 1.5, 20], [0, 0, 1], 120); M.mount('beam', g, [0, -2, 18], [0, 0, 1], 120);
+  M.mount('beam', g, [0, -10, -27], [0, 0, -1], 70);
+  M.mount('torp', g, [0, -7, 2], [0, 0, 1], 35);
+  M.shield = { c: new V3(0, -4, -1), r: new V3(26, 15, 40) };
+  return M;
+}
+
+function buildGalaxy() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0x6fb8ff, 2.4), bussard = glowMat(0xff3a1a, 2.8), warp = glowMat(0x4a8cff, 2.8), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  mesh(lathe([[0, -2.5], [8, -2.3], [20, -1.6], [27, -0.7], [29, 0], [27, 0.8], [18, 1.9], [8, 2.8], [3, 3.6], [0, 3.8]], 72), H, g, [0, 0, 18], null, [1, 1, 0.82]);
+  mesh(new THREE.SphereGeometry(2.4, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 3.6, 16]);
+  mesh(new THREE.SphereGeometry(1.5, 16, 8), glowMat(0xffd080, 1.4), g, [0, -2.4, 18]);
+  mesh(new THREE.BoxGeometry(12, 1.4, 2.6), H, g, [0, 0.6, -3.5]);
+  mesh(new THREE.BoxGeometry(10, 0.9, 0.3), impulse, g, [0, 0.6, -4.85]);
+  M.engine(g, [0, 0.6, -5.4], 9, 0xff4020);
+  mesh(new THREE.BoxGeometry(7, 9, 16), H, g, [0, -4.5, -1], [-0.2, 0, 0]);
+  const eg = new THREE.Group(); eg.position.set(0, -11, 0); eg.scale.set(1, 1.55, 1); g.add(eg);
+  mesh(latheZ([[0, -40], [3, -39], [5.5, -34], [6.2, -20], [6.4, -6], [6, 2], [5.2, 6], [4.6, 7]], 40), H, eg);
+  mesh(capZ(5.6, 1.0), deflector, eg, [0, 0, 3.97]);
+  for (const s of [1, -1]) {
+    strut(g, [3 * s, -12, -24], [21 * s, -0.5, -29], 1.4, 9, H);
+    const ng = new THREE.Group(); ng.position.set(21 * s, 0.5, -27); ng.scale.set(1.25, 0.75, 1); g.add(ng);
+    mesh(latheZ([[0, -25], [2, -24.5], [3, -22], [3.2, 18], [2.8, 22.5]], 24), H, ng);
+    mesh(capZ(2.85, Math.PI / 2), bussard, ng, [0, 0, 22.5]);
+    mesh(new THREE.BoxGeometry(0.5, 3.0, 36), warp, ng, [-3.15 * s, 0, -2]);
+    mesh(new THREE.BoxGeometry(2.2, 0.4, 34), warp, ng, [0, 3.1, -2]);
+    M.blinker(g, [21 * s, 0.5, -52], 0xffffff, s > 0 ? 0 : 0.5, 2.4);
+  }
+  M.blinker(g, [29, 0, 18], 0xff2020, 0, 3); M.blinker(g, [-29, 0, 18], 0x20ff40, 0, 3);
+  M.mount('beam', g, [0, 4, 22], [0, 0, 1], 140); M.mount('beam', g, [0, -2.5, 30], [0, 0, 1], 140);
+  M.mount('beam', g, [0, -12, -38], [0, 0, -1], 100);
+  M.mount('torp', g, [0, -6, 6], [0, 0, 1], 35); M.mount('torp', g, [0, -10, -38], [0, 0, -1], 35);
+  M.shield = { c: new V3(0, -5, -5), r: new V3(36, 18, 52) };
+  return M;
+}
+
+function buildDefiant() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const bussard = glowMat(0xff3a1a, 2.6), warp = glowMat(0x4a8cff, 2.8), cannon = glowMat(0xff7a2a, 2.4);
+  M.pulsing.push(bussard, warp);
+  mesh(extrudeShape(mirror([[0, 19], [6, 18], [9.5, 14], [10.5, 6], [12, -2], [12.5, -12], [9, -17], [0, -16]]), 3.2, 1.2), H, g);
+  mesh(extrudeShape(mirror([[0, 12], [4, 10], [5, 0], [5, -10], [0, -12]]), 1.6, 0.8), H, g, [0, 2.4, -1]);
+  mesh(new THREE.SphereGeometry(1.4, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 3.6, 4]);
+  for (const s of [1, -1]) {
+    mesh(latheZ([[0, -8], [1.6, -7.5], [2.2, -5], [2.2, 6], [1.8, 8]], 20), H, g, [12.5 * s, 0.3, -6]);
+    mesh(capZ(1.85, Math.PI / 2), bussard, g, [12.5 * s, 0.3, 2]);
+    mesh(new THREE.BoxGeometry(1.2, 0.3, 10), warp, g, [12.5 * s, 2.45, -6.5]);
+    mesh(new THREE.BoxGeometry(0.8, 0.6, 1.2), cannon, g, [5.5 * s, 0.2, 17.6]);
+    mesh(new THREE.BoxGeometry(0.8, 0.6, 1.2), cannon, g, [8.2 * s, 0.2, 14.5]);
+    mesh(new THREE.BoxGeometry(3, 0.8, 0.3), glowMat(0xff3020, 2.5), g, [4 * s, 0, -17.4]);
+    M.engine(g, [4 * s, 0, -17.9], 4.5, 0xff4020);
+    M.mount('pulse', g, [5.5 * s, 0.2, 18.5], [0, 0, 1], 22);
+    M.mount('pulse', g, [8.2 * s, 0.2, 15.4], [0, 0, 1], 22);
+  }
+  mesh(new THREE.SphereGeometry(1, 16, 8), glowMat(0x6ab8ff, 2.2), g, [0, -1.6, 18.2], null, [3, 0.7, 1]);
+  M.blinker(g, [14.6, 0.3, -6], 0xff2020, 0, 2); M.blinker(g, [-14.6, 0.3, -6], 0x20ff40, 0, 2);
+  M.mount('torp', g, [0, -1, 19], [0, 0, 1], 30);
+  M.shield = { c: new V3(0, 0, 0), r: new V3(18, 8, 24) };
+  return M;
+}
+
+// Freedom / Cestus Class: single-nacelle Wolf 359 light frigate
+function buildFreedom() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xffa040, 2.4), bussard = glowMat(0xff3a1a, 2.8), warp = glowMat(0x4a8cff, 2.8), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  mesh(lathe([[0, -2.0], [6, -1.8], [15, -1.2], [20, -0.4], [21.5, 0], [20, 0.7], [13, 1.5], [5, 2.3], [0, 2.8]], 60), H, g, [0, 2, 10], null, [1, 1, 0.88]);
+  mesh(new THREE.SphereGeometry(2.0, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 4.5, 9]);
+  mesh(new THREE.BoxGeometry(9, 1.3, 2.5), H, g, [0, 2.5, -8.5]);
+  mesh(new THREE.BoxGeometry(7.5, 0.8, 0.3), impulse, g, [0, 2.5, -9.8]);
+  M.engine(g, [0, 2.5, -10.3], 7.5, 0xff4020);
+  // single ventral pylon + weapon/sensor pod + single centerline Galaxy-style nacelle
+  strut(g, [0, 0.5, 4], [0, -9.5, -2], 2.2, 7, H);
+  mesh(new THREE.BoxGeometry(5.2, 2.6, 9), H, g, [0, -5.0, 2]);
+  mesh(new THREE.SphereGeometry(1.1, 14, 10), deflector, g, [0, -5.0, 6.6], null, [1.5, 0.8, 0.6]);
+  const ng = new THREE.Group(); ng.position.set(0, -10.5, -6); ng.scale.set(1.2, 0.8, 1); g.add(ng);
+  mesh(latheZ([[0, -22], [1.9, -21], [2.8, -18], [3.0, 16], [2.5, 20]], 24), H, ng);
+  mesh(capZ(2.55, Math.PI / 2), bussard, ng, [0, 0, 20]);
+  mesh(new THREE.BoxGeometry(0.5, 2.6, 32), warp, ng, [2.9, 0, -1]);
+  mesh(new THREE.BoxGeometry(0.5, 2.6, 32), warp, ng, [-2.9, 0, -1]);
+  M.blinker(g, [21.5, 2, 10], 0xff2020, 0, 2.2); M.blinker(g, [-21.5, 2, 10], 0x20ff40, 0, 2.2);
+  M.mount('beam', g, [0, 4.2, 18], [0, 0, 1], 135); M.mount('beam', g, [0, 0, 20], [0, 0, 1], 135);
+  M.mount('beam', g, [0, 2.5, -9.5], [0, 0, -1], 95);
+  M.mount('torp', g, [0, -5.0, 7], [0, 0, 1], 40);
+  M.shield = { c: new V3(0, -3, 1), r: new V3(25, 15, 34) };
+  return M;
+}
+
+// Nova Class: compact arrow/wedge science & light tactical vessel (U.S.S. Equinox)
+function buildNova() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xffaa44, 2.4), bussard = glowMat(0xff3a1a, 2.6), warp = glowMat(0x4a8cff, 2.8), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  // notched arrow primary hull
+  mesh(extrudeShape(mirror([[0, 16], [2.2, 18.5], [5.5, 15], [10.5, 7], [13.5, 0], [12, -5], [6, -7], [0, -7]]), 2.2, 0.8), H, g, [0, 1.2, 4]);
+  mesh(extrudeShape(mirror([[0, 12], [4.5, 7], [6.5, -2], [4.5, -14], [0, -16]]), 2.0, 0.7), H, g, [0, 2.8, 1]);
+  mesh(new THREE.SphereGeometry(1.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 4.1, 4]);
+  // ventral secondary hull + wide oval deflector
+  mesh(latheZ([[0, -16], [2.4, -15], [3.8, -10], [4.2, 2], [3.6, 8]], 28), H, g, [0, -1.6, 0], null, [1.2, 0.85, 1]);
+  mesh(new THREE.SphereGeometry(1, 16, 10), deflector, g, [0, -1.6, 8.2], null, [3.2, 1.4, 0.8]);
+  for (const s of [1, -1]) {
+    strut(g, [3.8 * s, -1.2, -5], [10.5 * s, 0.6, -7], 0.9, 4.5, H);
+    mesh(latheZ([[0, -11], [1.3, -10], [1.8, -7], [1.8, 7], [1.4, 9.5]], 20), H, g, [10.8 * s, 0.8, -7]);
+    mesh(capZ(1.45, Math.PI / 2), bussard, g, [10.8 * s, 0.8, 2.5]);
+    mesh(new THREE.BoxGeometry(0.35, 1.1, 14), warp, g, [(10.8 + 1.6) * s, 0.8, -7.5]);
+    mesh(new THREE.BoxGeometry(2.4, 0.7, 0.3), impulse, g, [3.2 * s, 2.4, -15.2]);
+    M.engine(g, [3.2 * s, 2.4, -15.7], 4.5, 0xff4020);
+  }
+  M.blinker(g, [13.5, 1.2, 4], 0xff2020, 0, 2); M.blinker(g, [-13.5, 1.2, 4], 0x20ff40, 0, 2);
+  M.mount('beam', g, [0, 3.5, 14], [0, 0, 1], 135); M.mount('beam', g, [0, -1.5, 12], [0, 0, 1], 130);
+  M.mount('beam', g, [0, 2.5, -15], [0, 0, -1], 95);
+  M.mount('torp', g, [0, -0.5, 13], [0, 0, 1], 35);
+  M.shield = { c: new V3(0, 0.5, 1), r: new V3(17, 9, 24) };
+  return M;
+}
+
+// Miranda / Centaur Class Refit: saucer + ventral nacelles + dorsal rollbar torpedo & mega-phaser pod
+function buildMiranda() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const bussard = glowMat(0xff5a2a, 2.6), warp = glowMat(0x4f8fff, 2.6), impulse = glowMat(0xff3020, 2.5), cannon = glowMat(0xff8833, 2.2);
+  M.pulsing.push(bussard, warp);
+  mesh(lathe([[0, -2.2], [5, -2.0], [14, -1.4], [19.5, -0.6], [21, 0], [19, 0.9], [12, 1.6], [6, 2.3], [3, 3.0], [0, 3.3]], 64), H, g, [0, 0, 6]);
+  mesh(new THREE.SphereGeometry(2.2, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 3.0, 6]);
+  // aft rectangular hull extension & shuttlebays
+  mesh(extrudeShape(mirror([[0, 6], [11, 4], [10.5, -16], [8, -19], [0, -19]]), 3.0, 0.9), H, g, [0, 0.3, 0]);
+  mesh(new THREE.BoxGeometry(9, 1.2, 0.3), impulse, g, [0, 0.6, -19.5]);
+  M.engine(g, [-3, 0.6, -20], 5.5, 0xff4020); M.engine(g, [3, 0.6, -20], 5.5, 0xff4020);
+  // dorsal rollbar arch + central twin torpedo pod
+  for (const s of [1, -1]) {
+    strut(g, [9.5 * s, 1.2, -9], [6.5 * s, 7.2, -9], 1.1, 3.8, H);
+    strut(g, [8.5 * s, -0.8, -11], [13.5 * s, -6.2, -13], 1.1, 4.5, H);
+    mesh(latheZ([[0, -16], [1.8, -15.5], [2.3, -13], [2.3, 12], [2.0, 14]], 24), H, g, [13.5 * s, -6.5, -14]);
+    mesh(capZ(2.05, Math.PI / 2), bussard, g, [13.5 * s, -6.5, 0]);
+    mesh(new THREE.BoxGeometry(0.4, 1.3, 21), warp, g, [(13.5 - 2.2) * s, -6.5, -15]);
+    mesh(new THREE.CylinderGeometry(0.7, 0.7, 5, 12).rotateX(Math.PI / 2), H, g, [10 * s, 2.0, -7]);
+    mesh(new THREE.SphereGeometry(0.65, 10, 8), cannon, g, [10 * s, 2.0, -4.4]);
+  }
+  strut(g, [-6.8, 7.2, -9], [6.8, 7.2, -9], 1.1, 3.6, H);
+  mesh(new THREE.BoxGeometry(5.2, 2.4, 9.5), H, g, [0, 7.6, -8.5]);
+  mesh(new THREE.BoxGeometry(3.8, 1.0, 0.3), cannon, g, [0, 7.6, -3.6]);
+  M.blinker(g, [21, 0.1, 6], 0xff2020, 0); M.blinker(g, [-21, 0.1, 6], 0x20ff40, 0);
+  M.mount('beam', g, [0, 2, 20], [0, 0, 1], 125); M.mount('beam', g, [10, 2, -4], [0, 0, 1], 120); M.mount('beam', g, [-10, 2, -4], [0, 0, 1], 120);
+  M.mount('beam', g, [0, 1, -19], [0, 0, -1], 90);
+  M.mount('torp', g, [0, 7.6, -3.5], [0, 0, 1], 40); M.mount('torp', g, [0, 7.6, -13.5], [0, 0, -1], 40);
+  M.shield = { c: new V3(0, 0, -3), r: new V3(25, 13, 33) };
+  return M;
+}
+
+// Akira Class: catamaran twin-boom heavy strike cruiser with dorsal multi-torpedo pod
+function buildAkira() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xff9933, 2.4), bussard = glowMat(0xff3a1a, 2.8), warp = glowMat(0x4a8cff, 2.8), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  // wide notched catamaran saucer
+  mesh(extrudeShape(mirror([[0, 20], [9, 22], [19, 16], [24, 6], [23, -4], [15, -8], [7, -4], [0, -5]]), 2.8, 1.1), H, g, [0, 0, 6]);
+  mesh(new THREE.SphereGeometry(2.2, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 2.2, 11]);
+  mesh(new THREE.BoxGeometry(7, 1.4, 4), deflector, g, [0, -1.6, 18]);
+  for (const s of [1, -1]) {
+    // twin catamaran booms sweeping back to nacelles + upper pylons to weapon pod
+    strut(g, [14 * s, -0.3, 0], [16.5 * s, -3.5, -22], 3.2, 4.5, H);
+    strut(g, [16 * s, -3.2, -16], [10.5 * s, 5.2, -18], 1.4, 5.5, H);
+    mesh(latheZ([[0, -20], [1.9, -19], [2.6, -15], [2.7, 14], [2.2, 18]], 24), H, g, [16.5 * s, -4.0, -22]);
+    mesh(capZ(2.25, Math.PI / 2), bussard, g, [16.5 * s, -4.0, -4]);
+    mesh(new THREE.BoxGeometry(0.45, 1.8, 28), warp, g, [(16.5 + 2.5) * s, -4.0, -23]);
+    mesh(new THREE.BoxGeometry(3.2, 1.0, 0.3), impulse, g, [12 * s, 0.2, -2.5]);
+    M.engine(g, [12 * s, 0.2, -3.1], 5.5, 0xff4020);
+  }
+  // massive dorsal torpedo pod bridging the upper pylons
+  strut(g, [-11, 5.2, -18], [11, 5.2, -18], 1.8, 6.5, H);
+  mesh(new THREE.BoxGeometry(10, 2.8, 11), H, g, [0, 5.8, -18]);
+  mesh(new THREE.BoxGeometry(8, 1.1, 0.4), glowMat(0xff6622, 2.2), g, [0, 5.8, -12.3]);
+  M.blinker(g, [24, 0, 12], 0xff2020, 0, 2.5); M.blinker(g, [-24, 0, 12], 0x20ff40, 0, 2.5);
+  M.mount('beam', g, [0, 2.5, 22], [0, 0, 1], 135); M.mount('beam', g, [0, -2.0, 20], [0, 0, 1], 135);
+  M.mount('beam', g, [0, 6.5, -23], [0, 0, -1], 100);
+  M.mount('torp', g, [-2.5, 5.8, -12], [0, 0, 1], 45); M.mount('torp', g, [2.5, 5.8, -12], [0, 0, 1], 45);
+  M.mount('torp', g, [0, 5.8, -24], [0, 0, -1], 45);
+  M.shield = { c: new V3(0, 0, -6), r: new V3(29, 14, 40) };
+  return M;
+}
+
+// Steamrunner Class: saucer with wingtip-integrated nacelles and twin aft booms holding a ventral deflector pod
+function buildSteamrunner() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xff9933, 2.5), bussard = glowMat(0xff3a1a, 2.7), warp = glowMat(0x4a8cff, 2.7), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  mesh(extrudeShape(mirror([[0, 21], [10, 19], [18, 12], [20, 2], [17, -6], [8, -8], [0, -7]]), 2.6, 1.0), H, g, [0, 0.5, 6]);
+  mesh(new THREE.SphereGeometry(2.0, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 2.5, 10]);
+  mesh(new THREE.BoxGeometry(8, 1.1, 0.3), impulse, g, [0, 1.0, -1.5]);
+  M.engine(g, [0, 1.0, -2.0], 6.5, 0xff4020);
+  for (const s of [1, -1]) {
+    // nacelles embedded into saucer wingtips + twin booms running aft to underslung pod
+    mesh(latheZ([[0, -14], [1.8, -13], [2.4, -9], [2.4, 10], [1.9, 13]], 20), H, g, [18.5 * s, 0.5, 2]);
+    mesh(capZ(1.95, Math.PI / 2), bussard, g, [18.5 * s, 0.5, 15]);
+    mesh(new THREE.BoxGeometry(0.4, 1.5, 18), warp, g, [(18.5 + 2.2) * s, 0.5, 1]);
+    strut(g, [18 * s, 0, -10], [4.5 * s, -4.5, -22], 1.6, 3.2, H);
+  }
+  mesh(new THREE.BoxGeometry(9, 3.6, 11), H, g, [0, -4.8, -21]);
+  mesh(new THREE.SphereGeometry(1, 16, 10), deflector, g, [0, -4.8, -15.2], null, [3.2, 1.2, 0.7]);
+  M.blinker(g, [21, 0.5, 6], 0xff2020, 0, 2.2); M.blinker(g, [-21, 0.5, 6], 0x20ff40, 0, 2.2);
+  M.mount('beam', g, [0, 2.4, 24], [0, 0, 1], 130); M.mount('beam', g, [0, -1.2, 22], [0, 0, 1], 130);
+  M.mount('beam', g, [0, -4.8, -26], [0, 0, -1], 95);
+  M.mount('torp', g, [0, 0.5, 26], [0, 0, 1], 38);
+  M.shield = { c: new V3(0, -1, -2), r: new V3(25, 11, 34) };
+  return M;
+}
+
+// Excelsior Class: stepped saucer, ribbed neck, long flared engineering hull, turquoise deflector, long nacelles
+function buildExcelsior() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0x44ccff, 2.6), bussard = glowMat(0xff4a2a, 2.4), warp = glowMat(0x4f8fff, 2.7), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  mesh(lathe([[0, -2.0], [7, -1.8], [17, -1.2], [22, -0.3], [23, 0.2], [20, 1.0], [13, 1.8], [6, 2.8], [0, 3.4]], 64), H, g, [0, 2, 20]);
+  mesh(new THREE.BoxGeometry(10, 2.0, 10), H, g, [0, 2.4, 2]);
+  mesh(new THREE.BoxGeometry(8.5, 1.0, 0.3), impulse, g, [0, 2.4, -3.1]);
+  M.engine(g, [0, 2.4, -3.7], 8, 0xff4020);
+  // tall vertical ribbed neck + long flared secondary hull
+  mesh(new THREE.BoxGeometry(3.4, 9.5, 7.5), H, g, [0, -3.5, 11]);
+  mesh(latheZ([[0, -36], [1.8, -34], [3.5, -26], [5.2, -14], [5.6, 0], [5.2, 10], [4.2, 13]], 40), H, g, [0, -9.5, 0], null, [1.15, 0.9, 1]);
+  mesh(capZ(4.5, 1.0), deflector, g, [0, -9.5, 9.8]);
+  for (const s of [1, -1]) {
+    strut(g, [4 * s, -9, -14], [15 * s, -9, -16], 1.2, 5.5, H);
+    strut(g, [15 * s, -9, -16], [15.5 * s, 1.5, -18], 1.2, 5.5, H);
+    mesh(latheZ([[0, -26], [1.5, -25], [2.1, -21], [2.2, 18], [1.8, 22]], 24), H, g, [15.5 * s, 2.2, -20]);
+    mesh(capZ(1.85, Math.PI / 2), bussard, g, [15.5 * s, 2.2, 2]);
+    mesh(new THREE.BoxGeometry(0.4, 1.4, 38), warp, g, [(15.5 - 2.0) * s, 2.2, -21]);
+    M.blinker(g, [15.5 * s, 2.2, -46], 0xffffff, s > 0 ? 0 : 0.5, 2.2);
+  }
+  M.blinker(g, [23, 2, 20], 0xff2020, 0); M.blinker(g, [-23, 2, 20], 0x20ff40, 0);
+  M.mount('beam', g, [0, 4, 28], [0, 0, 1], 130); M.mount('beam', g, [0, -1, 26], [0, 0, 1], 130);
+  M.mount('beam', g, [0, -8, -32], [0, 0, -1], 95);
+  M.mount('torp', g, [0, -7, 12], [0, 0, 1], 35); M.mount('torp', g, [0, -8, -34], [0, 0, -1], 35);
+  M.shield = { c: new V3(0, -3, -4), r: new V3(28, 16, 48) };
+  return M;
+}
+
+// Intrepid Class: sleek elongated spoon/arrowhead hull blended into secondary hull, angled variable-geometry nacelles
+function buildIntrepid() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xffaa44, 2.5), bussard = glowMat(0xff3a1a, 2.7), warp = glowMat(0x4a8cff, 2.8), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  // elongated spoon primary hull
+  mesh(extrudeShape(mirror([[0, 28], [6, 25], [12.5, 16], [15, 4], [12.5, -5], [7, -8], [0, -8]]), 2.4, 1.0), H, g, [0, 1.2, 4]);
+  mesh(extrudeShape(mirror([[0, 21], [4.5, 15], [7, 3], [5, -18], [0, -24]]), 2.2, 0.9), H, g, [0, 2.8, 2]);
+  mesh(new THREE.SphereGeometry(1.8, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 4.2, 8]);
+  // blended secondary hull + wide oval deflector dish
+  mesh(latheZ([[0, -28], [2.8, -26], [4.8, -18], [5.4, -4], [4.8, 8], [3.8, 12]], 36), H, g, [0, -2.2, 0], null, [1.2, 0.9, 1]);
+  mesh(new THREE.SphereGeometry(1, 18, 12), deflector, g, [0, -2.2, 11.8], null, [3.6, 1.6, 0.9]);
+  for (const s of [1, -1]) {
+    strut(g, [4.8 * s, -2.0, -14], [13.5 * s, 2.2, -16], 1.1, 6, H);
+    mesh(latheZ([[0, -13], [1.4, -12], [2.0, -9], [2.0, 9], [1.5, 12]], 22), H, g, [14 * s, 2.6, -17]);
+    mesh(capZ(1.55, Math.PI / 2), bussard, g, [14 * s, 2.6, -5]);
+    mesh(new THREE.BoxGeometry(0.4, 1.3, 18), warp, g, [(14 + 1.8) * s, 2.6, -17.5]);
+    mesh(new THREE.BoxGeometry(2.6, 0.8, 0.3), impulse, g, [8.5 * s, 0.2, -14.8]);
+    M.engine(g, [8.5 * s, 0.2, -15.3], 5.5, 0xff4020);
+  }
+  M.blinker(g, [15, 1.2, 8], 0xff2020, 0, 2.2); M.blinker(g, [-15, 1.2, 8], 0x20ff40, 0, 2.2);
+  M.mount('beam', g, [0, 3.2, 24], [0, 0, 1], 135); M.mount('beam', g, [0, -1.0, 24], [0, 0, 1], 135);
+  M.mount('beam', g, [0, 1.5, -24], [0, 0, -1], 100);
+  M.mount('torp', g, [0, -0.5, 15], [0, 0, 1], 38); M.mount('torp', g, [0, 0, -26], [0, 0, -1], 38);
+  M.shield = { c: new V3(0, 0, 0), r: new V3(20, 11, 36) };
+  return M;
+}
+
+// Sovereign Class: sleek diamond-oval saucer blended into engineering hull, swept-back pylons, long predatory nacelles
+function buildSovereign() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xffaa33, 2.6), bussard = glowMat(0xff3311, 2.9), warp = glowMat(0x4a8cff, 2.9), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  // sleek elongated oval-diamond primary hull
+  mesh(extrudeShape(mirror([[0, 34], [8, 30], [18, 20], [22, 6], [18, -6], [10, -12], [0, -14]]), 2.4, 1.0), H, g, [0, 1.0, 8]);
+  mesh(extrudeShape(mirror([[0, 26], [6, 18], [9, 4], [6, -16], [0, -24]]), 2.0, 0.8), H, g, [0, 2.8, 4]);
+  mesh(new THREE.SphereGeometry(2.0, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 4.3, 10]);
+  // muscular neckless secondary hull + golden deflector
+  mesh(latheZ([[0, -40], [2.4, -38], [4.8, -28], [5.8, -12], [5.6, 4], [4.5, 12]], 40), H, g, [0, -2.5, -2], null, [1.15, 0.95, 1]);
+  mesh(capZ(4.3, 1.0), deflector, g, [0, -2.5, 7.2]);
+  for (const s of [1, -1]) {
+    mesh(new THREE.BoxGeometry(4.2, 0.9, 0.3), impulse, g, [8 * s, 2.2, -5.5]);
+    M.engine(g, [8 * s, 2.2, -6.1], 6.5, 0xff4020);
+    strut(g, [4.5 * s, -2.5, -18], [18.5 * s, 3.2, -26], 1.3, 9, H);
+    mesh(latheZ([[0, -28], [1.4, -27], [2.3, -21], [2.5, 18], [2.0, 23]], 24), H, g, [18.5 * s, 3.8, -26]);
+    mesh(capZ(2.05, Math.PI / 2), bussard, g, [18.5 * s, 3.8, -3]);
+    mesh(new THREE.BoxGeometry(0.45, 1.6, 40), warp, g, [(18.5 + 2.3) * s, 3.8, -27]);
+    M.blinker(g, [18.5 * s, 3.8, -54], 0xffffff, s > 0 ? 0 : 0.5, 2.4);
+  }
+  M.blinker(g, [22, 1.0, 14], 0xff2020, 0, 2.6); M.blinker(g, [-22, 1.0, 14], 0x20ff40, 0, 2.6);
+  M.mount('beam', g, [0, 4.2, 26], [0, 0, 1], 145); M.mount('beam', g, [0, -1.2, 32], [0, 0, 1], 145);
+  M.mount('beam', g, [0, -1.5, -38], [0, 0, -1], 110);
+  M.mount('torp', g, [0, 0.2, 22], [0, 0, 1], 40); M.mount('torp', g, [0, -2.0, -38], [0, 0, -1], 40);
+  M.shield = { c: new V3(0, 0, -6), r: new V3(28, 14, 54) };
+  return M;
+}
+
+// Prometheus Class: angular arrowhead tactical cruiser with 4 warp nacelles and Multi-Vector Assault Mode (MVAM)
+function buildPrometheus() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xff8833, 2.5), bussard = glowMat(0xff2a1a, 2.8), warp = glowMat(0x4a8cff, 2.9), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  // sharp angular arrowhead hull (Alpha, Beta & Gamma sections layered)
+  mesh(extrudeShape(mirror([[0, 31], [4, 26], [11, 14], [16.5, 0], [15, -10], [8, -14], [0, -12]]), 2.4, 0.9), H, g, [0, 1.4, 5]);
+  mesh(extrudeShape(mirror([[0, 22], [5, 14], [9, 0], [8, -22], [4, -28], [0, -27]]), 3.0, 1.0), H, g, [0, -1.2, 0]);
+  mesh(new THREE.SphereGeometry(1.7, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 3.2, 8]);
+  mesh(new THREE.BoxGeometry(5.5, 1.8, 3), deflector, g, [0, -2.2, 18]);
+  for (const s of [1, -1]) {
+    mesh(new THREE.BoxGeometry(3.5, 0.9, 0.3), impulse, g, [5.5 * s, 1.2, -8.5]);
+    M.engine(g, [5.5 * s, 1.2, -9.1], 5.5, 0xff4020);
+    // upper dorsal nacelle pair
+    strut(g, [6 * s, 0.2, -12], [14.5 * s, 4.5, -18], 1.0, 5.5, H);
+    mesh(latheZ([[0, -18], [1.2, -17], [1.8, -13], [1.9, 12], [1.5, 15]], 20), H, g, [14.8 * s, 5.0, -19]);
+    mesh(capZ(1.55, Math.PI / 2), bussard, g, [14.8 * s, 5.0, -4]);
+    mesh(new THREE.BoxGeometry(0.4, 1.3, 26), warp, g, [(14.8 + 1.7) * s, 5.0, -20]);
+    // lower ventral nacelle pair
+    strut(g, [5.5 * s, -2.0, -14], [12.5 * s, -5.2, -19], 0.9, 5.0, H);
+    mesh(latheZ([[0, -14], [1.0, -13], [1.5, -10], [1.5, 10], [1.2, 12]], 20), H, g, [12.8 * s, -5.6, -20]);
+    mesh(capZ(1.25, Math.PI / 2), bussard, g, [12.8 * s, -5.6, -8]);
+    mesh(new THREE.BoxGeometry(0.35, 1.0, 20), warp, g, [(12.8 + 1.4) * s, -5.6, -20.5]);
+  }
+  M.blinker(g, [16.5, 1.4, 5], 0xff2020, 0, 2.2); M.blinker(g, [-16.5, 1.4, 5], 0x20ff40, 0, 2.2);
+  M.mount('beam', g, [0, 3.0, 26], [0, 0, 1], 140); M.mount('beam', g, [0, -2.5, 22], [0, 0, 1], 140);
+  M.mount('beam', g, [0, 0, -26], [0, 0, -1], 105);
+  M.mount('torp', g, [0, 0.2, 28], [0, 0, 1], 40); M.mount('torp', g, [0, -1.0, -27], [0, 0, -1], 40);
+  M.shield = { c: new V3(0, 0, -2), r: new V3(22, 12, 38) };
+  return M;
+}
+
+// Kirov / Concorde Class (Presidio/Geneva lineage): heavy guided-weapon battlecruiser with twin dorsal missile pods & quad nacelles
+function buildKirov() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0x55bbff, 2.6), bussard = glowMat(0xff3a1a, 2.8), warp = glowMat(0x4a8cff, 2.8), impulse = glowMat(0xff3020, 2.5);
+  M.pulsing.push(bussard, warp);
+  // wide armored saucer + heavy command bastion
+  mesh(lathe([[0, -2.6], [8, -2.3], [19, -1.6], [26, -0.6], [27.5, 0.2], [24, 1.2], [16, 2.2], [8, 3.4], [0, 4.0]], 64), H, g, [0, 1, 16], null, [1.05, 1, 0.9]);
+  mesh(new THREE.BoxGeometry(12, 2.6, 14), H, g, [0, 3.4, 6]);
+  mesh(new THREE.BoxGeometry(11, 1.2, 0.3), impulse, g, [0, 3.2, -1.2]);
+  M.engine(g, [-3.5, 3.2, -1.8], 7, 0xff4020); M.engine(g, [3.5, 3.2, -1.8], 7, 0xff4020);
+  // heavy engineering hull + twin dorsal guided-weapon torpedo pods on armored superstructure
+  mesh(new THREE.BoxGeometry(6.5, 9, 14), H, g, [0, -4.0, 2]);
+  mesh(latheZ([[0, -38], [3.2, -36], [5.8, -28], [6.6, -12], [6.4, 4], [5.2, 10]], 36), H, g, [0, -9.5, -2], null, [1.2, 1.0, 1]);
+  mesh(capZ(5.2, 1.0), deflector, g, [0, -9.5, 4.8]);
+  for (const s of [1, -1]) {
+    // dorsal weapon pod struts + heavy missile pods
+    strut(g, [5 * s, -4, -10], [8 * s, 6.8, -12], 1.5, 6, H);
+    mesh(new THREE.BoxGeometry(4.8, 2.8, 14), H, g, [8 * s, 7.5, -12]);
+    mesh(new THREE.BoxGeometry(3.6, 1.2, 0.4), glowMat(0xff6622, 2.4), g, [8 * s, 7.5, -4.8]);
+    // quad nacelles (upper and lower heavy pairs)
+    strut(g, [5 * s, -8, -18], [20 * s, 1.0, -24], 1.4, 7, H);
+    strut(g, [5 * s, -11, -18], [18 * s, -12.5, -24], 1.4, 7, H);
+    for (const [nx, ny] of [[20 * s, 1.8], [18 * s, -13.0]]) {
+      mesh(latheZ([[0, -24], [1.7, -23], [2.5, -18], [2.6, 16], [2.1, 20]], 22), H, g, [nx, ny, -24]);
+      mesh(capZ(2.15, Math.PI / 2), bussard, g, [nx, ny, -4]);
+      mesh(new THREE.BoxGeometry(0.45, 1.6, 34), warp, g, [nx + 2.3 * s, ny, -25]);
+    }
+  }
+  M.blinker(g, [28, 1, 16], 0xff2020, 0, 2.8); M.blinker(g, [-28, 1, 16], 0x20ff40, 0, 2.8);
+  M.mount('beam', g, [0, 4.5, 24], [0, 0, 1], 140); M.mount('beam', g, [0, -2, 28], [0, 0, 1], 140);
+  M.mount('beam', g, [0, -8, -36], [0, 0, -1], 105);
+  M.mount('torp', g, [-8, 7.5, -4.5], [0, 0, 1], 42); M.mount('torp', g, [8, 7.5, -4.5], [0, 0, 1], 42);
+  M.mount('torp', g, [0, 7.5, -19], [0, 0, -1], 42);
+  M.shield = { c: new V3(0, -3, -5), r: new V3(34, 18, 50) };
+  return M;
+}
+
+// Inquiry / Avenger Class: frontline 24th/25th century battlecruiser with armored deflector cowling, pulse cannons & phaser arrays
+function buildInquiry() {
+  const M = newModel(), g = M.group, H = hullMat('fed');
+  const deflector = glowMat(0xff4422, 2.8), bussard = glowMat(0xff2211, 3.0), warp = glowMat(0x5599ff, 2.9), cannon = glowMat(0xff7722, 2.5);
+  M.pulsing.push(bussard, warp);
+  // aggressive shovel-bow armored primary hull + spine
+  mesh(extrudeShape(mirror([[7, 32], [14, 29], [21, 18], [23, 4], [19, -8], [12, -16], [0, -18]]), 3.0, 1.2), H, g, [0, 0.8, 6]);
+  mesh(extrudeShape(mirror([[0, 25], [8, 22], [11, 6], [9, -24], [5, -34], [0, -35]]), 3.4, 1.1), H, g, [0, 2.8, 2]);
+  mesh(new THREE.SphereGeometry(2.2, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), H, g, [0, 5.0, 8]);
+  // muscular secondary hull with armored cowling over crimson deflector grill
+  mesh(extrudeShape(mirror([[0, 20], [9, 16], [10, -28], [6, -38], [0, -38]]), 4.2, 1.2), H, g, [0, -2.0, -2]);
+  mesh(new THREE.BoxGeometry(11, 2.6, 3), deflector, g, [0, -2.2, 18.2]);
+  for (let x = -4; x <= 4; x += 2) mesh(new THREE.BoxGeometry(0.4, 2.8, 3.4), H, g, [x, -2.2, 18.3]);
+  for (const s of [1, -1]) {
+    mesh(new THREE.BoxGeometry(5, 1.2, 0.4), glowMat(0xff3020, 2.6), g, [9 * s, 1.5, -12]);
+    M.engine(g, [9 * s, 1.5, -12.6], 7.5, 0xff4020);
+    // forward pulse phaser cannons on bow shoulders
+    mesh(new THREE.BoxGeometry(1.2, 0.8, 2.0), cannon, g, [10.5 * s, 1.2, 34]);
+    M.mount('pulse', g, [10.5 * s, 1.2, 35.5], [0, 0, 1], 28);
+    // heavy swept-up armored nacelles
+    strut(g, [8 * s, -1.0, -18], [20 * s, 4.2, -24], 1.8, 10, H);
+    mesh(latheZ([[0, -26], [1.9, -25], [2.9, -19], [3.0, 16], [2.4, 21]], 24), H, g, [20.5 * s, 4.8, -24]);
+    mesh(capZ(2.45, Math.PI / 2), bussard, g, [20.5 * s, 4.8, -3]);
+    mesh(new THREE.BoxGeometry(0.6, 2.0, 36), warp, g, [(20.5 + 2.8) * s, 4.8, -25]);
+    M.blinker(g, [20.5 * s, 4.8, -50], 0xffffff, s > 0 ? 0 : 0.5, 2.6);
+  }
+  M.blinker(g, [23, 0.8, 10], 0xff2020, 0, 2.8); M.blinker(g, [-23, 0.8, 10], 0x20ff40, 0, 2.8);
+  M.mount('beam', g, [0, 5.2, 24], [0, 0, 1], 145); M.mount('beam', g, [0, -2.5, 28], [0, 0, 1], 145);
+  M.mount('beam', g, [0, 2.0, -34], [0, 0, -1], 110);
+  M.mount('torp', g, [-3.5, 0.5, 31], [0, 0, 1], 42); M.mount('torp', g, [3.5, 0.5, 31], [0, 0, 1], 42);
+  M.mount('torp', g, [0, 0, -38], [0, 0, -1], 42);
+  M.shield = { c: new V3(0, 0, -4), r: new V3(30, 15, 50) };
+  return M;
+}
+
+function buildBirdOfPrey() {
+  const M = newModel(), g = M.group, H = hullMat('kli');
+  const disr = glowMat(0x8aff3a, 2.6), red = glowMat(0xff3a20, 2.0);
+  M.pulsing.push(red);
+  mesh(new THREE.SphereGeometry(1, 24, 16), H, g, [0, 0, 15], null, [4, 2.2, 5.5]);
+  mesh(new THREE.ConeGeometry(2.4, 5, 12).rotateX(Math.PI / 2), H, g, [0, -0.4, 21], null, [1, 0.5, 1]);
+  mesh(new THREE.SphereGeometry(0.9, 12, 8), glowMat(0xff3a1a, 3), g, [0, -1.5, 19.6]);
+  mesh(new THREE.BoxGeometry(2.4, 1.6, 10), H, g, [0, 0.3, 7]);
+  mesh(new THREE.SphereGeometry(1, 24, 16), H, g, [0, 0.8, -2], null, [6.5, 3.0, 8]);
+  mesh(new THREE.BoxGeometry(4, 2, 7), H, g, [0, 3, -3]);
+  mesh(new THREE.BoxGeometry(3, 1, 0.3), glowMat(0xff3020, 2.5), g, [0, 1, -10]);
+  M.engine(g, [0, 1, -10.5], 6, 0xff3020);
+  for (const s of [1, -1]) {
+    const wg = new THREE.Group(); wg.position.set(4 * s, 0.6, -3); wg.rotation.z = -0.35 * s; g.add(wg);
+    const shape = [[0, 4], [20 * s, -1], [21 * s, -5], [0, -9]];
+    mesh(extrudeShape(shape, 0.7, 0.35), H, wg);
+    mesh(new THREE.CylinderGeometry(0.6, 0.8, 7, 12).rotateX(Math.PI / 2), H, wg, [20.5 * s, 0, -1]);
+    mesh(new THREE.SphereGeometry(0.55, 10, 8), disr, wg, [20.5 * s, 0, 2.6]);
+    mesh(new THREE.BoxGeometry(10, 0.25, 1.2), red, wg, [10 * s, 0.55, -6]);
+    M.mount('pulse', wg, [20.5 * s, 0, 3.4], [0, 0, 1], 25);
+  }
+  M.mount('torp', g, [0, -1.5, 21], [0, 0, 1], 30);
+  M.shield = { c: new V3(0, -1.5, 2), r: new V3(26, 10, 22) };
+  return M;
+}
+
+function buildKtinga() {
+  const M = newModel(), g = M.group, H = hullMat('kli');
+  const red = glowMat(0xff4a20, 2.2), disr = glowMat(0x8aff3a, 2.6);
+  M.pulsing.push(red);
+  mesh(new THREE.SphereGeometry(1, 24, 16), H, g, [0, 0, 26], null, [4.5, 3.4, 5.5]);
+  mesh(new THREE.SphereGeometry(1, 20, 12), H, g, [0, -2.2, 25], null, [3, 2, 4]);
+  mesh(new THREE.SphereGeometry(0.9, 12, 8), glowMat(0xff3a1a, 3), g, [0, -0.6, 31.3]);
+  mesh(latheZ([[1.7, -11], [1.2, -4], [1.0, 4], [1.5, 11]], 16), H, g, [0, 0.6, 12]);
+  mesh(extrudeShape(mirror([[0, 5], [5, 3], [15, -5], [18, -9], [17, -12], [6, -14], [0, -15]]), 3, 1), H, g, [0, 0, -4]);
+  mesh(new THREE.SphereGeometry(1, 20, 12), H, g, [0, 2, -7], null, [5, 2.2, 9]);
+  mesh(new THREE.BoxGeometry(5, 1, 0.3), glowMat(0xff3020, 2.5), g, [0, 0.5, -20.2]);
+  M.engine(g, [0, 0.5, -20.8], 7, 0xff3020);
+  for (const s of [1, -1]) {
+    mesh(latheZ([[0, -11], [1.5, -10.5], [2, -8], [2, 8], [1.6, 10]], 20), H, g, [17.5 * s, 1, -12]);
+    mesh(capZ(1.65, Math.PI / 2), red, g, [17.5 * s, 1, -2]);
+    mesh(new THREE.BoxGeometry(1.0, 0.3, 14), red, g, [17.5 * s, 2.95, -12]);
+    mesh(new THREE.SphereGeometry(0.5, 10, 8), disr, g, [3.4 * s, -1.4, 29]);
+    M.mount('pulse', g, [3.4 * s, -1.4, 30], [0, 0, 1], 40);
+  }
+  M.mount('torp', g, [0, -0.6, 32], [0, 0, 1], 35); M.mount('torp', g, [0, 0.5, -21], [0, 0, -1], 35);
+  M.shield = { c: new V3(0, 0, 5), r: new V3(25, 10, 34) };
+  return M;
+}
+
+// Klingon Negh'Var Class Heavy Warship
+function buildNeghvar() {
+  const M = newModel(), g = M.group, H = hullMat('kli');
+  const red = glowMat(0xff4a20, 2.5), disr = glowMat(0x8aff3a, 2.8);
+  M.pulsing.push(red);
+  mesh(extrudeShape(mirror([[0, 34], [6, 30], [8, 18], [5.5, 8], [11, 2], [26, -6], [28, -14], [18, -20], [8, -24], [0, -26]]), 3.6, 1.2), H, g);
+  mesh(extrudeShape(mirror([[0, 16], [5, 10], [8, -4], [7, -20], [0, -23]]), 4.2, 1.0), H, g, [0, 3.0, 0]);
+  mesh(new THREE.SphereGeometry(1.3, 12, 8), glowMat(0xff3a1a, 3), g, [0, -0.5, 34.5]);
+  mesh(new THREE.BoxGeometry(10, 1.6, 0.4), red, g, [0, 1.5, -26.5]);
+  M.engine(g, [0, 1.5, -27.2], 11, 0xff3020);
+  for (const s of [1, -1]) {
+    mesh(latheZ([[0, -16], [1.8, -15], [2.6, -10], [2.6, 12], [2.0, 15]], 20), H, g, [25 * s, -1.5, -12]);
+    mesh(capZ(2.05, Math.PI / 2), red, g, [25 * s, -1.5, 3]);
+    mesh(new THREE.CylinderGeometry(1.1, 1.3, 12, 12).rotateX(Math.PI / 2), H, g, [13 * s, -3.2, 8]);
+    mesh(new THREE.SphereGeometry(1.0, 10, 8), disr, g, [13 * s, -3.2, 14.5]);
+    M.mount('pulse', g, [13 * s, -3.2, 15.5], [0, 0, 1], 38);
+  }
+  M.mount('beam', g, [0, 4.5, 12], [0, 0, 1], 110);
+  M.mount('torp', g, [0, -0.5, 35], [0, 0, 1], 40); M.mount('torp', g, [0, 1.5, -27], [0, 0, -1], 40);
+  M.shield = { c: new V3(0, 0, 4), r: new V3(32, 13, 40) };
+  return M;
+}
+
+// Cardassian Galor Class Cruiser: golden delta/ankh hull with forward spiral-wave disruptor emitter
+function buildGalor() {
+  const M = newModel(), g = M.group, H = hullMat('car');
+  const amb = glowMat(0xffbb33, 2.8); M.pulsing.push(amb);
+  mesh(extrudeShape(mirror([[0, 30], [5, 22], [21, 8], [23, 2], [11, -4], [6, -16], [4, -30], [0, -32]]), 2.6, 1.0), H, g);
+  mesh(extrudeShape(mirror([[0, 22], [3.5, 14], [7, 2], [4, -18], [0, -26]]), 3.2, 0.9), H, g, [0, 2.4, 0]);
+  mesh(new THREE.SphereGeometry(2.2, 16, 10), amb, g, [0, 4.2, 6], null, [1.4, 0.6, 2.2]);
+  mesh(new THREE.ConeGeometry(2.2, 6, 12).rotateX(Math.PI / 2), amb, g, [0, 0.2, 31]);
+  mesh(new THREE.BoxGeometry(5, 1.4, 0.4), amb, g, [0, 0.8, -32.2]);
+  M.engine(g, [0, 0.8, -33], 8, 0xffaa22);
+  M.mount('beam', g, [0, 0.2, 33], [0, 0, 1], 125); M.mount('beam', g, [0, 4.2, 8], [0, 0, 1], 125);
+  M.mount('beam', g, [0, 1.5, -31], [0, 0, -1], 95);
+  M.mount('torp', g, [0, -1.0, 28], [0, 0, 1], 38);
+  M.shield = { c: new V3(0, 0, 0), r: new V3(26, 10, 36) };
+  return M;
+}
+
+// Dominion Jem'Hadar Attack Ship: beetle/scarab fighter with twin bow mandibles and polaron cannons
+function buildJemhadar() {
+  const M = newModel(), g = M.group, H = hullMat('dom');
+  const pol = glowMat(0x88bbff, 2.8), eng = glowMat(0xaa66ff, 2.6); M.pulsing.push(pol);
+  mesh(extrudeShape(mirror([[0, 11], [2.5, 19], [5.5, 17], [8, 8], [15, -2], [14, -11], [7, -14], [0, -13]]), 2.8, 1.0), H, g);
+  mesh(new THREE.SphereGeometry(1, 20, 14), H, g, [0, 2.2, -1], null, [6.5, 2.8, 9]);
+  for (const s of [1, -1]) {
+    mesh(latheZ([[0, -10], [1.4, -9], [1.9, -5], [1.9, 5], [1.4, 8]], 18), H, g, [13.5 * s, -0.8, -6]);
+    mesh(capZ(1.45, Math.PI / 2), pol, g, [13.5 * s, -0.8, 2]);
+    mesh(new THREE.SphereGeometry(0.7, 10, 8), pol, g, [3.8 * s, 0, 18.5]);
+    M.mount('pulse', g, [3.8 * s, 0, 19.5], [0, 0, 1], 30);
+  }
+  mesh(new THREE.BoxGeometry(6, 1.2, 0.3), eng, g, [0, 0.5, -13.5]);
+  M.engine(g, [0, 0.5, -14.2], 6.5, 0x9966ff);
+  M.mount('torp', g, [0, -1.2, 12], [0, 0, 1], 35);
+  M.shield = { c: new V3(0, 0, 2), r: new V3(19, 9, 22) };
+  return M;
+}
+
+// Borg Tactical Cube: massive dark metallic lattice cube with glowing green inner core and omni-directional mounts
+function buildBorgCube() {
+  const M = newModel(), g = M.group, H = hullMat('brg');
+  const green = glowMat(0x22ff66, 2.4); M.pulsing.push(green);
+  mesh(new THREE.BoxGeometry(44, 44, 44), H, g);
+  mesh(new THREE.BoxGeometry(38, 38, 38), green, g);
+  for (const a of [-16, 0, 16]) for (const b of [-16, 0, 16]) {
+    mesh(new THREE.BoxGeometry(10, 10, 46), H, g, [a, b, 0]);
+    mesh(new THREE.BoxGeometry(46, 10, 10), H, g, [0, a, b]);
+    mesh(new THREE.BoxGeometry(10, 46, 10), H, g, [a, 0, b]);
+  }
+  for (const d of [[0, 0, 1], [0, 0, -1], [1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0]]) {
+    M.mount('beam', g, [d[0] * 23, d[1] * 23, d[2] * 23], d, 110);
+    M.mount('torp', g, [d[0] * 23, d[1] * 23, d[2] * 23], d, 75);
+  }
+  M.shield = { c: new V3(0, 0, 0), r: new V3(36, 36, 36) };
+  return M;
+}
+
+function buildWarbird() {
+  const M = newModel(), g = M.group, H = hullMat('rom'), H2 = hullMat('rom', THREE.DoubleSide);
+  const green = glowMat(0x4aff7a, 2.4); M.pulsing.push(green);
+  const hw = v => v < 0.28 ? lerp(16, 42, THREE.MathUtils.smoothstep(v / 0.28, 0, 1)) : lerp(42, 3, Math.pow((v - 0.28) / 0.72, 0.8));
+  const shell = (sign, inset) => {
+    const geo = new THREE.PlaneGeometry(1, 1, 40, 30), p = geo.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      const px = p.getX(i), v = p.getY(i) + 0.5, w = hw(v), x = px * 2 * w;
+      const y = sign * (15 * (1 - (x / 42) ** 2) + 3 * Math.sin(v * Math.PI) - inset);
+      p.setXYZ(i, x, y, lerp(-31, 24, v));
+    }
+    geo.computeVertexNormals(); return geo;
+  };
+  mesh(shell(1, 0), H2, g); mesh(shell(1, 1.4), H2, g);
+  mesh(shell(-1, 0), H2, g); mesh(shell(-1, 1.4), H2, g);
+  strut(g, [0, 16, 18], [0, 2, 46], 4, 7, H);
+  mesh(new THREE.SphereGeometry(1, 24, 16), H, g, [0, 1, 52], null, [7, 4.5, 10]);
+  mesh(new THREE.ConeGeometry(4, 10, 16).rotateX(Math.PI / 2), H, g, [0, 0, 63], null, [1, 0.5, 1]);
+  mesh(new THREE.SphereGeometry(1.2, 12, 8), green, g, [0, -1.8, 60]);
+  mesh(new THREE.BoxGeometry(8, 30, 16), H, g, [0, 0, -24]);
+  mesh(new THREE.BoxGeometry(6, 22, 0.4), green, g, [0, 0, -32.3]);
+  M.engine(g, [0, 0, -33], 16, 0x40ff70);
+  for (const s of [1, -1]) {
+    mesh(new THREE.BoxGeometry(6, 0.4, 3), green, g, [26 * s, 9.2, -18]);
+    mesh(new THREE.BoxGeometry(6, 0.4, 3), green, g, [26 * s, -9.2, -18]);
+    M.mount('beam', g, [20 * s, 13, 2], [0, 0, 1], 100);
+  }
+  M.mount('beam', g, [0, -1.8, 61], [0, 0, 1], 110);
+  M.mount('torp', g, [0, -2, 64], [0, 0, 1], 45);
+  M.shield = { c: new V3(0, 0, 12), r: new V3(50, 26, 60) };
+  return M;
+}
+
+/* =====================================================================
+   SHIP CLASS DATA  (stats derived from Memory Alpha / DITL references)
+   ===================================================================== */
+const CLASSES = {
+  // ---- FRIGATES & LIGHT ESCORTS ----
+  freedom: {
+    id: 'freedom', name: 'Freedom Class', sub: 'Light Frigate / Interceptor', faction: 'fed', build: buildFreedom, scale: 0.92,
+    hull: 720, shield: 420, speed: 155, accel: 56, turn: 1.15, ai: 'escort',
+    beam: { name: 'TYPE-X ARRAYS', dps: 135, dur: 1.4, recharge: 2.6, range: 1150, color: 0xff6a1a, width: 1.0 },
+    torp: { name: 'PHOTON TORP', dmg: 250, reload: 3.6, ammo: 36, speed: 500, turn: 1.15, color: 0xff4a1a, size: 6 },
+    registry: 'U.S.S. Firebrand NCC-68723',
+    info: [['Length', '430 m'], ['Crew', '~200'], ['Speed', 'Warp 9.2'], ['Config', 'Single ventral nacelle frigate'], ['Weapons', 'Type-X phaser arrays + photon pod'], ['Era', '24th century (Wolf 359 / Dominion War)']],
+    blurb: 'Designed as a high-speed reconnaissance and interception frigate. Its single-nacelle frame gives it brisk acceleration and a compact target profile.'
+  },
+  nova: {
+    id: 'nova', name: 'Nova Class', sub: 'Scout / Light Tactical Vessel', faction: 'fed', build: buildNova, scale: 0.85,
+    hull: 650, shield: 460, speed: 150, accel: 58, turn: 1.28, ai: 'escort',
+    beam: { name: 'TYPE-X ARRAYS', dps: 125, dur: 1.5, recharge: 2.2, range: 1100, color: 0xff6a1a, width: 0.95 },
+    torp: { name: 'PHOTON TORP', dmg: 240, reload: 3.4, ammo: 32, speed: 500, turn: 1.2, color: 0xff4a1a, size: 5.5 },
+    registry: 'U.S.S. Equinox NCC-72381',
+    info: [['Length', '222 m'], ['Crew', '~80'], ['Speed', 'Warp 8+'], ['Phasers', '11 Type-X emitters, rapid recharge'], ['Torpedoes', '2 forward photon launchers'], ['Era', 'Late 24th century']],
+    blurb: 'A nimble science and scout platform whose oversized deflector grid and fast-cycling phaser emitters make it a surprisingly scrappy light combatant.'
+  },
+  defiant: {
+    id: 'defiant', name: 'Defiant Class', sub: 'Escort / Warship', faction: 'fed', build: buildDefiant, scale: 0.9,
+    hull: 850, shield: 500, speed: 165, accel: 62, turn: 1.3, ai: 'escort',
+    pulse: { name: 'PULSE PHASERS', dmg: 35, interval: 0.11, cost: 0.06, regen: 0.3, range: 1100, speed: 1100, color: 0xff6a1a, width: 1.1 },
+    torp: { name: 'QUANTUM TORP', dmg: 340, reload: 3.2, ammo: 50, speed: 560, turn: 1.3, color: 0x6aa8ff, size: 6 },
+    registry: 'U.S.S. Defiant NX-74205',
+    info: [['Length', '171 m'], ['Crew', '~50'], ['Speed', 'Warp 9.5'], ['Weapons', '4 rapid-fire pulse phaser cannons'], ['Torpedoes', 'Quantum torpedo launchers'], ['Era', '24th century (DS9 / Borg Defense)']],
+    blurb: 'Starfleet\'s first dedicated warship, built small and armored after the Borg threat. Point the bow and unleash quad pulse phasers and quantum torpedoes.'
+  },
+
+  // ---- DESTROYERS & MEDIUM CRUISERS ----
+  miranda: {
+    id: 'miranda', name: 'Miranda Class', sub: 'Medium Cruiser / Patrol Refit', faction: 'fed', build: buildMiranda, scale: 0.98,
+    hull: 920, shield: 500, speed: 132, accel: 44, turn: 0.95, ai: 'cruiser',
+    beam: { name: 'MEGA-PHASERS', dps: 155, dur: 1.5, recharge: 2.8, range: 1150, color: 0xff5a1e, width: 1.15 },
+    torp: { name: 'ROLLBAR PHOTON', dmg: 270, reload: 3.4, ammo: 48, speed: 490, turn: 1.1, color: 0xff4a1a, size: 6 },
+    registry: 'U.S.S. Reliant NCC-1864',
+    info: [['Length', '243 m'], ['Crew', '~220'], ['Speed', 'Warp 9'], ['Weapons', 'Rollbar mega-phasers + standard banks'], ['Torpedoes', 'Fore & aft rollbar photon pod'], ['Era', '23rd–24th century workhorse']],
+    blurb: 'A versatile saucer-and-rollbar medium cruiser used for border patrol and fleet support, mounting heavy mega-phasers and fore/aft torpedo tubes.'
+  },
+  akira: {
+    id: 'akira', name: 'Akira Class', sub: 'Heavy Strike / Carrier Cruiser', faction: 'fed', build: buildAkira, scale: 1.1,
+    hull: 1250, shield: 640, speed: 128, accel: 42, turn: 0.82, ai: 'cruiser',
+    beam: { name: 'TYPE-X ARRAYS', dps: 155, dur: 1.6, recharge: 3.0, range: 1200, color: 0xff6a1a, width: 1.2 },
+    torp: { name: 'SALVO PHOTON', dmg: 240, reload: 2.6, salvo: 2, ammo: 90, speed: 520, turn: 1.15, color: 0xff4a1a, size: 6 },
+    registry: 'U.S.S. Akira NX-62497',
+    info: [['Length', '464 m'], ['Crew', '~500'], ['Speed', 'Warp 9.8'], ['Phasers', '6 Type-X phaser arrays'], ['Torpedoes', '15-tube dorsal pod (fires 2x salvos)'], ['Era', 'Late 24th century (Sector 001 / DS9)']],
+    blurb: 'Catamaran strike cruiser built around a massive dorsal weapons pod that launches twin-torpedo salvos with rapid reload cycles.'
+  },
+  steamrunner: {
+    id: 'steamrunner', name: 'Steamrunner Class', sub: 'Tactical Strike Frigate', faction: 'fed', build: buildSteamrunner, scale: 1.0,
+    hull: 1050, shield: 560, speed: 138, accel: 48, turn: 0.96, ai: 'cruiser',
+    beam: { name: 'TYPE-X ARRAYS', dps: 160, dur: 1.6, recharge: 2.8, range: 1200, color: 0xff6a1a, width: 1.15 },
+    torp: { name: 'PHOTON TORP', dmg: 290, reload: 3.3, ammo: 55, speed: 510, turn: 1.15, color: 0xff4a1a, size: 6.5 },
+    registry: 'U.S.S. Appalachia NCC-52136',
+    info: [['Length', '356 m'], ['Crew', '~200'], ['Speed', 'Warp 9.6'], ['Design', 'Wing-embedded nacelles & aft pod'], ['Weapons', 'Type-X arrays + bow torpedo bay'], ['Era', 'Late 24th century']],
+    blurb: 'Compact, rugged strike vessel with warp nacelles faired directly into the saucer wings, built for rapid-response perimeter defense and fleet engagements.'
+  },
+  excelsior: {
+    id: 'excelsior', name: 'Excelsior Class', sub: 'Heavy Cruiser (Refit)', faction: 'fed', build: buildExcelsior, scale: 1.12,
+    hull: 1220, shield: 600, speed: 130, accel: 38, turn: 0.74, ai: 'cruiser',
+    beam: { name: 'TYPE-IX BANKS', dps: 162, dur: 1.6, recharge: 3.0, range: 1220, color: 0xff5a1e, width: 1.2 },
+    torp: { name: 'PHOTON TORP', dmg: 275, reload: 3.8, ammo: 56, speed: 490, turn: 1.1, color: 0xff4a1a, size: 6.5 },
+    registry: 'U.S.S. Excelsior NCC-2000',
+    info: [['Length', '467 m'], ['Crew', '~750'], ['Speed', 'Warp 9.0'], ['Phasers', '10 dual Type-IX banks'], ['Torpedoes', 'Fore and aft photon bays'], ['Era', '23rd–24th century backbone']],
+    blurb: 'The long-serving workhorse of Starfleet. Tough hull, strong shields, high cruise speed, and fore/aft torpedo coverage.'
+  },
+  constitution: {
+    id: 'constitution', name: 'Constitution Class', sub: 'Heavy Cruiser (Refit)', faction: 'fed', build: buildConstitution, scale: 1.0,
+    hull: 1000, shield: 520, speed: 125, accel: 40, turn: 0.85, ai: 'cruiser',
+    beam: { name: 'PHASER BANKS', dps: 150, dur: 1.4, recharge: 3.0, range: 1150, color: 0xff5a1e, width: 1.0 },
+    torp: { name: 'PHOTON TORP', dmg: 260, reload: 4.0, ammo: 40, speed: 480, turn: 1.1, color: 0xff4a1a, size: 6 },
+    registry: 'U.S.S. Enterprise NCC-1701-A',
+    info: [['Length', '305 m (refit)'], ['Crew', '~430'], ['Speed', 'Warp 8 cruise / Warp 9 max'], ['Phasers', '9 dual Type-VII banks'], ['Torpedoes', '2 forward photon launchers'], ['Era', '23rd century (TMP–TUC)']],
+    blurb: 'The ship that made Starfleet famous. A balanced heavy cruiser with good phaser coverage to the bow and its forward torpedoes.'
+  },
+
+  // ---- HEAVY EXPLORERS & MULTI-MISSION CRUISERS ----
+  intrepid: {
+    id: 'intrepid', name: 'Intrepid Class', sub: 'Long-Range Explorer', faction: 'fed', build: buildIntrepid, scale: 1.02,
+    hull: 1150, shield: 650, speed: 148, accel: 50, turn: 0.98, ai: 'cruiser',
+    beam: { name: 'TYPE-X ARRAYS', dps: 165, dur: 1.7, recharge: 2.8, range: 1250, color: 0xff6a1a, width: 1.2 },
+    torp: { name: 'PHOTON TORP', dmg: 285, reload: 3.6, ammo: 45, speed: 520, turn: 1.2, color: 0xff4a1a, size: 6.5 },
+    registry: 'U.S.S. Voyager NCC-74656',
+    info: [['Length', '344 m'], ['Crew', '~150'], ['Speed', 'Warp 9.975 sustained'], ['Phasers', '13 Type-X arrays'], ['Torpedoes', 'Fore and aft launchers'], ['Era', '24th century (VOY)']],
+    blurb: 'Sleek, bio-neural long-range explorer with variable-geometry warp nacelles. Combines cruiser-grade firepower with escort-like speed and agility.'
+  },
+  galaxy: {
+    id: 'galaxy', name: 'Galaxy Class', sub: 'Heavy Explorer', faction: 'fed', build: buildGalaxy, scale: 1.25,
+    hull: 1500, shield: 760, speed: 105, accel: 28, turn: 0.55, ai: 'cruiser',
+    beam: { name: 'TYPE-X ARRAYS', dps: 170, dur: 1.8, recharge: 3.4, range: 1300, color: 0xff6a1a, width: 1.3 },
+    torp: { name: 'PHOTON TORP', dmg: 280, reload: 4.6, ammo: 60, speed: 480, turn: 1.1, color: 0xff4a1a, size: 7 },
+    registry: 'U.S.S. Enterprise NCC-1701-D',
+    info: [['Length', '642 m'], ['Crew', '1,014'], ['Speed', 'Warp 9.6 sustained'], ['Phasers', '12 Type-X arrays, near-360° coverage'], ['Torpedoes', 'Fore and aft launchers'], ['Era', '24th century (TNG)']],
+    blurb: 'Starfleet flagship. Massive shields and hull, phaser arrays that cover almost every angle and torpedoes fore and aft. Slow to turn.'
+  },
+  sovereign: {
+    id: 'sovereign', name: 'Sovereign Class', sub: 'Heavy Tactical Explorer', faction: 'fed', build: buildSovereign, scale: 1.28,
+    hull: 1700, shield: 860, speed: 124, accel: 38, turn: 0.72, ai: 'cruiser',
+    beam: { name: 'TYPE-XII ARRAYS', dps: 195, dur: 1.9, recharge: 3.0, range: 1350, color: 0xff7722, width: 1.45 },
+    torp: { name: 'QUANTUM TORP', dmg: 360, reload: 3.4, ammo: 70, speed: 560, turn: 1.3, color: 0x6aa8ff, size: 7 },
+    registry: 'U.S.S. Enterprise NCC-1701-E',
+    info: [['Length', '685 m'], ['Crew', '~855'], ['Speed', 'Warp 9.95'], ['Phasers', '16 Type-XII arrays'], ['Torpedoes', 'Rapid-fire quantum + photon turrets'], ['Era', 'Late 24th century (First Contact / Nemesis)']],
+    blurb: 'Starfleet\'s premier late-24th-century flagship, combining deep-space explorer endurance with devastating Type-XII phaser arrays and quantum torpedoes.'
+  },
+  prometheus: {
+    id: 'prometheus', name: 'Prometheus Class', sub: 'Multi-Vector Tactical Cruiser', faction: 'fed', build: buildPrometheus, scale: 1.05,
+    hull: 1400, shield: 780, speed: 145, accel: 52, turn: 0.95, ai: 'cruiser', mvam: true,
+    beam: { name: 'TYPE-XII ARRAYS', dps: 185, dur: 1.7, recharge: 2.8, range: 1300, color: 0xff7722, width: 1.35 },
+    torp: { name: 'QUANTUM TORP', dmg: 340, reload: 3.4, ammo: 60, speed: 560, turn: 1.3, color: 0x6aa8ff, size: 6.5 },
+    registry: 'U.S.S. Prometheus NX-59650',
+    info: [['Length', '415 m'], ['Crew', '~141 (4 min)'], ['Speed', 'Warp 9.99'], ['Special', 'Multi-Vector Assault Mode (Press G)'], ['Weapons', 'Type-XII arrays + quantum torpedoes'], ['Era', 'Late 24th century deep-space prototype']],
+    blurb: 'Experimental deep-space tactical cruiser. Press SPECIAL (G) to engage Multi-Vector Assault Mode, splitting into Alpha, Beta, and Gamma combat vectors!'
+  },
+
+  // ---- BATTLECRUISERS & HEAVY DREADNOUGHTS ----
+  kirov: {
+    id: 'kirov', name: 'Kirov / Concorde Class', sub: 'Guided-Weapon Battlecruiser', faction: 'fed', build: buildKirov, scale: 1.25,
+    hull: 1850, shield: 880, speed: 108, accel: 32, turn: 0.58, ai: 'cruiser',
+    beam: { name: 'HEAVY PHASERS', dps: 185, dur: 1.8, recharge: 3.1, range: 1320, color: 0xff6a1a, width: 1.4 },
+    torp: { name: 'QUANTUM SALVO', dmg: 310, reload: 3.2, salvo: 2, ammo: 96, speed: 550, turn: 1.25, color: 0x6aa8ff, size: 6.8 },
+    registry: 'U.S.S. Kirov NCC-43720',
+    info: [['Length', '580 m'], ['Crew', '~720'], ['Speed', 'Warp 9.6'], ['Config', 'Quad-nacelle guided-missile dreadnought'], ['Torpedoes', 'Twin dorsal missile pods (2x quantum salvo)'], ['Era', '24th century (Presidio / Concorde lineage)']],
+    blurb: 'Heavy quad-nacelle Starfleet battlecruiser outfitted with twin dorsal guided-weapon superstructures that launch dual quantum torpedo salvos.'
+  },
+  inquiry: {
+    id: 'inquiry', name: 'Inquiry / Avenger Class', sub: 'Frontline Heavy Battlecruiser', faction: 'fed', build: buildInquiry, scale: 1.22,
+    hull: 2000, shield: 940, speed: 126, accel: 42, turn: 0.75, ai: 'cruiser',
+    beam: { name: 'PHASER ARRAYS', dps: 175, dur: 1.8, recharge: 2.9, range: 1320, color: 0xff6a1a, width: 1.4 },
+    pulse: { name: 'PULSE CANNONS', dmg: 28, interval: 0.14, cost: 0.05, regen: 0.3, range: 1100, speed: 1100, color: 0xff7722, width: 1.15 },
+    torp: { name: 'QUANTUM SALVO', dmg: 330, reload: 3.4, salvo: 2, ammo: 84, speed: 570, turn: 1.3, color: 0x6aa8ff, size: 7 },
+    registry: 'U.S.S. Zheng He NCC-86505',
+    info: [['Length', '640 m'], ['Crew', '~600'], ['Speed', 'Warp 9.99'], ['Weapons', 'Type-XII arrays + bow pulse cannons'], ['Torpedoes', 'Dual-salvo quantum launchers'], ['Era', 'Late 24th–25th century tough warship']],
+    blurb: 'The toughest, fastest frontline battlecruiser in Starfleet. Fires both wide-arc phaser arrays AND forward pulse phaser cannons alongside dual quantum torpedoes!'
+  },
+
+  // ---- HOSTILE VESSELS ----
+  bop: {
+    id: 'bop', name: "B'rel Class Bird-of-Prey", sub: 'Klingon Raider', faction: 'kli', build: buildBirdOfPrey, scale: 0.9,
+    hull: 520, shield: 300, speed: 145, accel: 55, turn: 1.25, ai: 'raider', cloak: true,
+    pulse: { name: 'DISRUPTORS', dmg: 26, interval: 0.24, cost: 0.08, regen: 0.22, range: 1000, speed: 900, color: 0x7aff3a, width: 1.2 },
+    torp: { name: 'PHOTON TORP', dmg: 200, reload: 6.5, ammo: 99, speed: 450, turn: 0.9, color: 0xff2a10, size: 5 },
+    info: [['Length', '~110 m'], ['Crew', '~12'], ['Weapons', 'Wing disruptor cannons, 1 torpedo'], ['Special', 'Cloaking device']]
+  },
+  ktinga: {
+    id: 'ktinga', name: "K't'inga Class", sub: 'Klingon Battle Cruiser', faction: 'kli', build: buildKtinga, scale: 1.05,
+    hull: 950, shield: 480, speed: 108, accel: 32, turn: 0.65, ai: 'cruiser',
+    pulse: { name: 'DISRUPTORS', dmg: 30, interval: 0.3, cost: 0.08, regen: 0.2, range: 1050, speed: 900, color: 0x7aff3a, width: 1.4 },
+    torp: { name: 'PHOTON TORP', dmg: 230, reload: 5.5, ammo: 99, speed: 450, turn: 0.9, color: 0xff2a10, size: 6 },
+    info: [['Length', '~214 m'], ['Weapons', 'Forward disruptors, fore + aft torpedoes']]
+  },
+  neghvar: {
+    id: 'neghvar', name: "Negh'Var Class", sub: 'Klingon Heavy Dreadnought', faction: 'kli', build: buildNeghvar, scale: 1.35,
+    hull: 1850, shield: 820, speed: 95, accel: 26, turn: 0.52, ai: 'cruiser',
+    beam: { name: 'DISRUPTOR BEAM', dps: 165, dur: 1.8, recharge: 3.4, range: 1250, color: 0x66ff33, width: 1.4 },
+    pulse: { name: 'SIEGE CANNONS', dmg: 38, interval: 0.32, cost: 0.08, regen: 0.22, range: 1100, speed: 920, color: 0x7aff3a, width: 1.5 },
+    torp: { name: 'PHOTON TORP', dmg: 290, reload: 4.8, ammo: 99, speed: 470, turn: 0.95, color: 0xff2a10, size: 7 },
+    info: [['Length', '682 m'], ['Weapons', 'Heavy siege disruptors + photon torpedoes']]
+  },
+  warbird: {
+    id: 'warbird', name: "D'deridex Class Warbird", sub: 'Romulan Battleship', faction: 'rom', build: buildWarbird, scale: 1.5,
+    hull: 2200, shield: 900, speed: 80, accel: 20, turn: 0.38, ai: 'battleship', cloak: true,
+    beam: { name: 'DISRUPTOR ARRAY', dps: 190, dur: 2.0, recharge: 3.6, range: 1300, color: 0x3aff6a, width: 1.6 },
+    torp: { name: 'PLASMA TORP', dmg: 620, reload: 9, ammo: 99, speed: 300, turn: 0.75, color: 0x6aff5a, size: 14, plasma: true },
+    info: [['Length', '~1,350 m'], ['Crew', '~1,500'], ['Weapons', 'Disruptor arrays, plasma torpedo'], ['Special', 'Cloaking device, singularity core']]
+  },
+  galor: {
+    id: 'galor', name: 'Galor Class', sub: 'Cardassian Cruiser', faction: 'car', build: buildGalor, scale: 1.1,
+    hull: 1100, shield: 540, speed: 112, accel: 34, turn: 0.68, ai: 'cruiser',
+    beam: { name: 'SPIRAL DISRUPTOR', dps: 155, dur: 1.7, recharge: 3.2, range: 1200, color: 0xffbb22, width: 1.35 },
+    torp: { name: 'PHOTON TORP', dmg: 230, reload: 5.2, ammo: 99, speed: 460, turn: 0.95, color: 0xff9922, size: 6 },
+    info: [['Length', '481 m'], ['Weapons', 'Spiral-wave disruptor arrays']]
+  },
+  jemhadar: {
+    id: 'jemhadar', name: "Jem'Hadar Attack Ship", sub: 'Dominion Strike Fighter', faction: 'dom', build: buildJemhadar, scale: 0.9,
+    hull: 680, shield: 380, speed: 152, accel: 58, turn: 1.22, ai: 'raider',
+    pulse: { name: 'POLARON CANNONS', dmg: 28, interval: 0.2, cost: 0.07, regen: 0.24, range: 1050, speed: 960, color: 0x77bbff, width: 1.25 },
+    torp: { name: 'POLARON TORP', dmg: 220, reload: 5.5, ammo: 99, speed: 480, turn: 1.0, color: 0x9966ff, size: 5.5 },
+    info: [['Length', '130 m'], ['Weapons', 'Phased polaron cannons + torpedoes']]
+  },
+  borgcube: {
+    id: 'borgcube', name: 'Borg Tactical Cube', sub: 'Collective Vessel', faction: 'brg', build: buildBorgCube, scale: 1.45,
+    hull: 3400, shield: 1200, speed: 72, accel: 22, turn: 0.45, ai: 'battleship', regenHull: 16,
+    beam: { name: 'CUTTING BEAM', dps: 225, dur: 2.2, recharge: 3.2, range: 1400, color: 0x22ff66, width: 1.75 },
+    torp: { name: 'GRAVIMETRIC TORP', dmg: 440, reload: 6.0, ammo: 99, speed: 420, turn: 1.0, color: 0x33ff77, size: 10 },
+    info: [['Dimensions', '3,000 m Cube'], ['Weapons', 'Cutting beams, gravimetric torpedoes, nanite regeneration']]
+  }
+};
+const SHIP_CATEGORIES = [
+  { title: 'Frigates & Light Escorts', ships: ['freedom', 'nova', 'defiant'] },
+  { title: 'Destroyers & Medium Cruisers', ships: ['miranda', 'akira', 'steamrunner', 'excelsior', 'constitution'] },
+  { title: 'Heavy Explorers & Multi-Mission Cruisers', ships: ['intrepid', 'galaxy', 'sovereign', 'prometheus'] },
+  { title: 'Battlecruisers & Heavy Dreadnoughts', ships: ['kirov', 'inquiry'] }
+];
+const NAMES = {
+  fed: ['U.S.S. Lexington', 'U.S.S. Hood', 'U.S.S. Yamato', 'U.S.S. Odyssey', 'U.S.S. Valiant', 'U.S.S. Venture', 'U.S.S. Excalibur', 'U.S.S. Potemkin', 'U.S.S. Exeter', 'U.S.S. Thunderchild', 'U.S.S. Lakota', 'U.S.S. Sutherland', 'U.S.S. Bozeman', 'U.S.S. Majestic', 'U.S.S. Centaur'],
+  kli: ["I.K.S. Rotarran", "I.K.S. Ch'Tang", "I.K.S. Koraga", "I.K.S. Hegh'ta", "I.K.S. Buruk", "I.K.S. Gorkon", "I.K.S. Klothos", "I.K.S. Bortas", "I.K.S. Vor'cha", "I.K.S. Pagh", "I.K.S. Negh'Var", "I.K.S. Ning'tao"],
+  rom: ['I.R.W. Khazara', 'I.R.W. Haakona', 'I.R.W. Devoras', 'I.R.W. Terix', 'I.R.W. Belak', 'I.R.W. Decius', 'I.R.W. Valdore', 'I.R.W. T\'Met'],
+  car: ['C.U.W. Trager', 'C.U.W. Kraxon', 'C.U.W. Aldara', 'C.U.W. Reklar', 'C.U.W. Vetar', 'C.U.W. Koranak'],
+  dom: ['Dominion Attack Wing Alpha', 'Dominion Attack Wing Beta', 'Dominion Strike Vessel 4', 'Dominion Strike Vessel 7', 'Dominion Raider 9', 'Dominion Escort 12'],
+  brg: ['Borg Cube 461', 'Borg Cube 1184', 'Borg Tactical Vessel 01']
+};
+const HAILS = {
+  kli: ['"Federation dogs! Today is a good day to die!"', '"You have entered Klingon space. Your ship will make a fine trophy. Qapla\'!"', '"Surrender your vessel or be destroyed. Not that we want you to surrender."', '"Only a fool fights in a burning house. Prepare to burn!"'],
+  rom: ['"Federation vessel, you have violated the Neutral Zone. Withdraw or be destroyed."', '"The Romulan Star Empire does not tolerate intruders, Captain."', '"Your presence here is an act of war. We will respond accordingly."'],
+  car: ['"Attention Starfleet vessel: you are trespassing in Cardassian Union territory. Lower your shields immediately."', '"For Cardassia! Target their bridge and primary weapons!"'],
+  dom: ['"Victory is life! All ships, attack pattern Weyoun—destroy the Federation vessel!"', '"The Founders have ordered your destruction. Obey."'],
+  brg: ['"We are the Borg. Lower your shields and surrender your ships. Resistance is futile."', '"Your defensive capabilities are inadequate. You will be assimilated."']
+};
+const FACTION_SHIELD = { fed: 0x4aa8ff, kli: 0xffaa33, rom: 0x55ff88, car: 0xffbb33, dom: 0x9977ff, brg: 0x33ff77 };
+
+/* =====================================================================
+   PARTICLES & EFFECTS
+   ===================================================================== */
+class Particles {
+  constructor(N) {
+    this.N = N; this.cursor = 0;
+    this.pos = new Float32Array(N * 3); this.col = new Float32Array(N * 3); this.size = new Float32Array(N);
+    this.vel = new Float32Array(N * 3); this.life = new Float32Array(N); this.max = new Float32Array(N);
+    this.s0 = new Float32Array(N); this.s1 = new Float32Array(N); this.c0 = new Float32Array(N * 3); this.c1 = new Float32Array(N * 3); this.drag = new Float32Array(N);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aColor', new THREE.BufferAttribute(this.col, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('aSize', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
+    this.geo = g;
+    this.mat = new THREE.ShaderMaterial({
+      uniforms: { uScale: { value: 600 } },
+      vertexShader: `attribute vec3 aColor; attribute float aSize; uniform float uScale; varying vec3 vC;
+        void main(){ vC = aColor; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_PointSize = aSize*uScale/max(1.0,-mv.z); gl_Position = projectionMatrix*mv; }`,
+      fragmentShader: `varying vec3 vC; void main(){ float d = length(gl_PointCoord-0.5)*2.0; float a = 1.0-smoothstep(0.0,1.0,d); a*=a; gl_FragColor = vec4(vC*a,1.0); }`,
+      blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
+    });
+    this.points = new THREE.Points(g, this.mat); this.points.frustumCulled = false; scene.add(this.points);
+  }
+  emit(p, v, life, s0, s1, c0, c1, drag = 0) {
+    const i = this.cursor; this.cursor = (i + 1) % this.N; const k = i * 3;
+    this.pos[k] = p.x; this.pos[k + 1] = p.y; this.pos[k + 2] = p.z;
+    this.vel[k] = v.x; this.vel[k + 1] = v.y; this.vel[k + 2] = v.z;
+    this.c0[k] = c0[0]; this.c0[k + 1] = c0[1]; this.c0[k + 2] = c0[2];
+    this.c1[k] = c1[0]; this.c1[k + 1] = c1[1]; this.c1[k + 2] = c1[2];
+    this.life[i] = life; this.max[i] = life; this.s0[i] = s0; this.s1[i] = s1; this.drag[i] = drag;
+  }
+  clear() { this.life.fill(0); this.size.fill(0); this.geo.attributes.aSize.needsUpdate = true; }
+  update(dt) {
+    if (dt <= 0) return;
+    const { pos, vel, col, size, life, max, s0, s1, c0, c1, drag } = this;
+    for (let i = 0; i < this.N; i++) {
+      if (life[i] <= 0) { if (size[i] !== 0) size[i] = 0; continue; }
+      life[i] -= dt; const k = i * 3;
+      if (life[i] <= 0) { size[i] = 0; continue; }
+      const t = 1 - life[i] / max[i], f = 1 - t, dr = Math.max(0, 1 - drag[i] * dt);
+      vel[k] *= dr; vel[k + 1] *= dr; vel[k + 2] *= dr;
+      pos[k] += vel[k] * dt; pos[k + 1] += vel[k + 1] * dt; pos[k + 2] += vel[k + 2] * dt;
+      size[i] = s0[i] + (s1[i] - s0[i]) * t;
+      col[k] = (c0[k] + (c1[k] - c0[k]) * t) * f; col[k + 1] = (c0[k + 1] + (c1[k + 1] - c0[k + 1]) * t) * f; col[k + 2] = (c0[k + 2] + (c1[k + 2] - c0[k + 2]) * t) * f;
+    }
+    const a = this.geo.attributes; a.position.needsUpdate = a.aColor.needsUpdate = a.aSize.needsUpdate = true;
+  }
+}
+const particles = new Particles(8000);
+
+let fxList = [];
+function flash(pos, size, hex, life = 0.5, k = 3) {
+  const m = new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(hex).multiplyScalar(k), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
+  const s = new THREE.Sprite(m); s.position.copy(pos); s.scale.setScalar(size); scene.add(s);
+  let t = 0;
+  fxList.push({ obj: s, update(dt) { t += dt; const q = t / life; if (q >= 1) { scene.remove(s); m.dispose(); return false; } s.scale.setScalar(size * (0.6 + 0.8 * q)); m.opacity = (1 - q) * (1 - q); return true; } });
+}
+const ringGeo = new THREE.RingGeometry(0.82, 1, 72);
+function shockwave(pos, size, hex, life = 1.6) {
+  const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(2.2), blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+  const r = new THREE.Mesh(ringGeo, m); r.position.copy(pos); r.lookAt(_t1.copy(pos).add(randDir())); scene.add(r);
+  let t = 0;
+  fxList.push({ obj: r, update(dt) { t += dt; const q = t / life; if (q >= 1) { scene.remove(r); m.dispose(); return false; } r.scale.setScalar(1 + size * Math.pow(q, 0.6)); m.opacity = (1 - q); return true; } });
+}
+function sparks(pos, n, c0 = [3, 2.2, 1.2], spd = 40, size = 2) {
+  for (let i = 0; i < n; i++) particles.emit(pos, randDir().multiplyScalar(rand(0.3, 1) * spd), rand(0.25, 0.7), size, size * 0.3, c0, [1, 0.3, 0.05], 2);
+}
+function explode(pos, size, big = false, ringHex = 0xffaa66) {
+  const n = Math.min(260, 40 + size * 4);
+  for (let i = 0; i < n; i++) {
+    const d = randDir(), sp = rand(0.15, 1) * size * 1.5;
+    particles.emit(pos, d.multiplyScalar(sp), rand(0.6, 1.8), size * rand(0.25, 0.55), size * rand(0.6, 1.2), [3, 1.5, 0.45], [0.5, 0.08, 0.02], 1.0);
+  }
+  for (let i = 0; i < n * 0.6; i++) particles.emit(pos, randDir().multiplyScalar(rand(1, 3) * size * 2), rand(0.4, 1.1), rand(1.5, 3), 0.5, [4, 3.4, 2.4], [2, 0.6, 0.1], 0.6);
+  flash(pos, size * 4, 0xffd8a0, 0.5);
+  if (big) {
+    flash(pos, size * 9, ringHex, 1.4, 2); shockwave(pos, size * 10, ringHex, 2.0); shockwave(pos, size * 6, 0xffffff, 1.2);
+    sfx.explosion(pos, true);
+  } else sfx.explosion(pos, false);
+  if (camera.position.distanceTo(pos) < 1500) shake = Math.max(shake, (big ? 2.2 : 0.5) * (1 - camera.position.distanceTo(pos) / 1500));
+}
+const debrisGeos = [new THREE.BoxGeometry(1, 1, 1), new THREE.TetrahedronGeometry(1), new THREE.DodecahedronGeometry(0.8, 0), new THREE.BoxGeometry(2, 0.3, 1)];
+function debris(ship) {
+  const mat = hullMat(ship.faction);
+  for (let i = 0; i < 22; i++) {
+    const m = new THREE.Mesh(pick(debrisGeos), mat);
+    m.scale.setScalar(rand(0.8, 3.5) * ship.scale * (i < 4 ? 2.2 : 1));
+    m.position.copy(ship.pos).addScaledVector(randDir(), ship.radius * 0.3);
+    scene.add(m);
+    const vel = ship.vel.clone().multiplyScalar(0.4).addScaledVector(randDir(), rand(10, 70));
+    const av = new V3(rand(-3, 3), rand(-3, 3), rand(-3, 3));
+    let t = 0, life = rand(5, 9), burn = Math.random() < 0.5 ? rand(1.5, 4) : 0, et = 0;
+    fxList.push({ obj: m, update(dt) {
+      t += dt; if (t > life) { scene.remove(m); return false; }
+      m.position.addScaledVector(vel, dt); m.rotation.x += av.x * dt; m.rotation.y += av.y * dt; m.rotation.z += av.z * dt;
+      if (t > life - 1) m.scale.multiplyScalar(1 - dt * 2);
+      if (t < burn && (et -= dt) < 0) { et = 0.04; particles.emit(m.position, _t1.set(0, 0, 0), 0.9, 3, 7, [2.5, 1.0, 0.25], [0.3, 0.05, 0], 0); }
+      return true;
+    } });
+  }
+}
+
+/* ---------- shield bubble shader ---------- */
+const shieldGeo = new THREE.SphereGeometry(1, 40, 24);
+function makeShieldMat(hex) {
+  return new THREE.ShaderMaterial({
+    uniforms: { uColor: { value: new THREE.Color(hex) }, uHits: { value: Array.from({ length: 6 }, () => new THREE.Vector4(0, 0, 1, 9)) } },
+    vertexShader: `varying vec3 vP; varying vec3 vN; varying vec3 vV;
+      void main(){ vP = normalize(position); vec4 wp = modelMatrix*vec4(position,1.0); vN = normalize(mat3(modelMatrix)*normal); vV = normalize(cameraPosition-wp.xyz); gl_Position = projectionMatrix*viewMatrix*wp; }`,
+    fragmentShader: `uniform vec3 uColor; uniform vec4 uHits[6]; varying vec3 vP; varying vec3 vN; varying vec3 vV;
+      void main(){ float fr = pow(1.0-abs(dot(normalize(vN),normalize(vV))),2.0); float a = 0.0;
+        for(int i=0;i<6;i++){ vec4 h = uHits[i]; if(h.w<1.0){ float d = distance(vP,h.xyz); float t = h.w;
+          a += exp(-d*d*16.0)*(1.0-t)*1.3 + exp(-pow((d-t*1.2)*8.0,2.0))*(1.0-t)*0.7 + (1.0-t)*(1.0-t)*0.08; } }
+        a *= (0.4+fr*1.3); gl_FragColor = vec4(uColor*a,1.0); }`,
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide
+  });
+}
+
+/* ---------- phaser / disruptor beams ---------- */
+const beamGeo = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true).translate(0, 0.5, 0);
+const WHITE = new THREE.Color(1, 1, 1);
+class BeamFx {
+  constructor(hex, width) {
+    this.width = width;
+    const add = { blending: THREE.AdditiveBlending, transparent: true, depthWrite: false };
+    this.g = new THREE.Group();
+    this.core = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).lerp(WHITE, 0.55).multiplyScalar(3), ...add }));
+    this.outer = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(hex).multiplyScalar(1.6), opacity: 0.5, ...add }));
+    this.g.add(this.core, this.outer);
+    const sm = () => new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(hex).lerp(WHITE, 0.3).multiplyScalar(2.5), ...add });
+    this.hit = new THREE.Sprite(sm()); this.src = new THREE.Sprite(sm());
+    scene.add(this.g, this.hit, this.src); this.hide();
+  }
+  set(a, b) {
+    const len = a.distanceTo(b); if (len < 0.01) return;
+    this.g.position.copy(a); this.g.quaternion.setFromUnitVectors(Y_AXIS, _t5.subVectors(b, a).divideScalar(len));
+    const w = this.width * (0.8 + Math.random() * 0.4);
+    this.core.scale.set(w * 0.3, len, w * 0.3); this.outer.scale.set(w, len, w);
+    this.hit.position.copy(b); this.hit.scale.setScalar(w * 14 * (0.7 + Math.random() * 0.6));
+    this.src.position.copy(a); this.src.scale.setScalar(w * 7);
+    this.g.visible = this.hit.visible = this.src.visible = true;
+  }
+  hide() { this.g.visible = this.hit.visible = this.src.visible = false; }
+  dispose() { scene.remove(this.g, this.hit, this.src); }
+}
+
+/* ---------- projectiles (disruptor bolts, pulse phasers, torpedoes) ---------- */
+const boltGeo = new THREE.CylinderGeometry(0.5, 0.5, 1, 6).rotateX(Math.PI / 2);
+class Projectile {
+  constructor(o) {
+    Object.assign(this, o); this.travel = 0; this.dead = false; this.trailT = 0;
+    const add = { blending: THREE.AdditiveBlending, transparent: true, depthWrite: false };
+    this.obj = new THREE.Group(); this.obj.position.copy(this.pos);
+    if (this.kind === 'bolt') {
+      const m = new THREE.Mesh(boltGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(this.color).lerp(WHITE, 0.4).multiplyScalar(3), ...add }));
+      m.scale.set(this.width, this.width, 16 * this.width); m.position.z = -6 * this.width; this.obj.add(m);
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(this.color).multiplyScalar(2), ...add }));
+      s.scale.setScalar(this.width * 9); this.obj.add(s);
+    } else {
+      this.halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(this.color).multiplyScalar(2.6), ...add }));
+      this.core = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: new THREE.Color(4, 4, 4), ...add }));
+      this.halo.scale.setScalar(this.size * 2.6); this.core.scale.setScalar(this.size * 0.8); this.obj.add(this.halo, this.core);
+    }
+    scene.add(this.obj);
+  }
+  update(dt) {
+    const t = this.target;
+    if (this.kind === 'torp') {
+      const spd = Math.min(this.speed, this.vel.length() + this.speed * 1.5 * dt);
+      const dir = _t1.copy(this.vel).normalize();
+      if (t && t.alive && t.cloakLevel < 0.6) {
+        const des = leadPoint(this.pos, t, spd).sub(this.pos).normalize();
+        const ang = dir.angleTo(des);
+        if (ang > 1e-4) dir.lerp(des, Math.min(1, this.turn * dt / ang)).normalize();
+      }
+      this.vel.copy(dir).multiplyScalar(spd);
+      const fl = 0.8 + Math.random() * 0.4;
+      this.halo.scale.setScalar(this.size * 2.6 * fl); this.core.scale.setScalar(this.size * 0.8 * (1.6 - fl * 0.6));
+      if ((this.trailT -= dt) < 0) {
+        this.trailT = 0.016;
+        const c = new THREE.Color(this.color);
+        particles.emit(this.pos, _t2.copy(this.vel).multiplyScalar(-0.05), this.plasma ? 0.7 : 0.45, this.size * 1.1, this.size * 0.2, [c.r * 2, c.g * 2, c.b * 2], [c.r * 0.3, c.g * 0.3, c.b * 0.3], 0);
+      }
+    }
+    const step = this.vel.length() * dt;
+    this.pos.addScaledVector(this.vel, dt); this.travel += step; this.life -= dt;
+    this.obj.position.copy(this.pos);
+    if (this.kind === 'bolt') this.obj.lookAt(_t3.copy(this.pos).add(this.vel));
+    // collisions (also check midpoint of the step so fast bolts can't tunnel)
+    const mid = _t4.copy(this.pos).addScaledVector(this.vel, -0.5 * dt);
+    for (const s of ships) {
+      if (s.side === this.side || !s.alive || s.warp) continue;
+      if (s.pointInShield(this.pos) || s.pointInShield(mid)) { this.impact(s); return; }
+    }
+    if (this.life <= 0) {
+      this.dead = true;
+      if (this.kind === 'torp') { flash(this.pos, this.size * 4, this.color, 0.4); sparks(this.pos, 20, [2, 1.5, 1], 30); }
+    }
+  }
+  impact(s) {
+    this.dead = true;
+    let dmg = this.dmg;
+    if (this.plasma) dmg *= lerp(1, 0.35, clamp(this.travel / 1600, 0, 1)); // plasma loses energy the farther it travels
+    const from = _t5.copy(this.pos).addScaledVector(this.vel, -0.2);
+    const hp = this.pos.clone();
+    s.takeDamage(dmg, from.clone(), hp, this.owner, true);
+    if (this.kind === 'torp') {
+      if (this.owner) this.owner.stats.torpsHit++;
+      explode(hp, this.plasma ? 22 : 12, false);
+      const c = new THREE.Color(this.color); flash(hp, this.size * 8, c, 0.6);
+    } else { sparks(hp, 12, [3, 2.6, 1.6], 50, 2.5); flash(hp, 14 * this.width, this.color, 0.25); }
+  }
+  dispose() { scene.remove(this.obj); }
+}
+function leadPoint(from, t, speed) {
+  const p = new V3().copy(t.pos);
+  let time = from.distanceTo(p) / speed;
+  p.copy(t.pos).addScaledVector(t.vel, time);
+  time = from.distanceTo(p) / speed;
+  return p.copy(t.pos).addScaledVector(t.vel, time);
+}
+
+/* =====================================================================
+   SHIP
+   ===================================================================== */
+const POWER = {
+  bal: { w: 1, s: 1, e: 1, label: 'BALANCED' }, wep: { w: 1.45, s: 0.8, e: 0.8, label: 'WEAPONS' },
+  shd: { w: 0.8, s: 1.6, e: 0.8, label: 'SHIELDS' }, eng: { w: 0.8, s: 0.8, e: 1.35, label: 'ENGINES' }
+};
+const FACING_NAMES = ['FORWARD', 'STARBOARD', 'AFT', 'PORT'];
+const SYS_NAMES = { weapons: 'Weapons array', torps: 'Torpedo bay', engines: 'Impulse engines', shields: 'Shield generator' };
+const DIFF = [
+  { name: 'CADET', dmg: 0.45, err: 7, react: 0.45 }, { name: 'LIEUTENANT', dmg: 0.7, err: 4.5, react: 0.65 },
+  { name: 'CAPTAIN', dmg: 1.0, err: 2.5, react: 0.85 }, { name: 'ADMIRAL', dmg: 1.35, err: 1.2, react: 1.0 }
+];
+let ships = [], projectiles = [], player = null;
+
+class Ship {
+  constructor(clsId, side, name, isPlayer = false) {
+    const c = this.cls = CLASSES[clsId];
+    this.side = side; this.name = name; this.isPlayer = isPlayer; this.faction = c.faction; this.scale = c.scale;
+    this.obj = new THREE.Group(); this.visual = new THREE.Group(); this.obj.add(this.visual);
+    const M = this.M = c.build(); M.group.scale.setScalar(c.scale); this.visual.add(M.group);
+    this.shieldC = M.shield.c.clone().multiplyScalar(c.scale); this.shieldR = M.shield.r.clone().multiplyScalar(c.scale);
+    this.radius = Math.max(this.shieldR.x, this.shieldR.y, this.shieldR.z);
+    this.colRadius = (this.shieldR.x + this.shieldR.z) * 0.5 * 0.7;
+    this.shieldMat = makeShieldMat(FACTION_SHIELD[c.faction]);
+    this.shieldMesh = new THREE.Mesh(shieldGeo, this.shieldMat);
+    this.shieldMesh.position.copy(this.shieldC); this.shieldMesh.scale.copy(this.shieldR); this.shieldMesh.visible = false;
+    this.obj.add(this.shieldMesh); this.hitIdx = 0;
+    this.mats = []; M.group.traverse(o => { if (o.material && !this.mats.includes(o.material)) this.mats.push(o.material); });
+    M.engines.forEach(e => this.mats.push(e.material)); M.blinkers.forEach(e => this.mats.push(e.material));
+    this.hullMax = this.hull = c.hull; this.shieldMax = c.shield;
+    this.shields = [c.shield, c.shield, c.shield, c.shield]; this.lastHit = [-99, -99, -99, -99];
+    this.systems = { weapons: 1, torps: 1, engines: 1, shields: 1 };
+    this.speed = 0; this.drift = new V3(); this.angVel = new V3(); this.vel = new V3();
+    this.f = new V3(0, 0, 1); this.u = new V3(0, 1, 0); this.r = new V3(1, 0, 0);
+    this.input = { yaw: 0, pitch: 0, roll: 0, throttle: 0 }; this.autoLevel = true; this.power = 'bal';
+    this.beam = c.beam ? { charge: 1, active: false, fx: [], sound: null, hitT: 0, off: new V3() } : null;
+    this.pulse = c.pulse ? { energy: 1, cd: 0, idx: 0 } : null;
+    this.torp = { ready: 1, ammo: c.torp.ammo };
+    this.cloakLevel = 0; this.cloakState = 'none';
+    this.alive = true; this.removed = false; this.dying = 0; this.dieT = 0; this.warp = null;
+    this.target = null; this.wantBeam = null; this.wantPulse = false;
+    this.dmgMult = 1; this.aimErr = 0; this.fireT = 0;
+    this.stats = { dealt: 0, taken: 0, kills: 0, torpsFired: 0, torpsHit: 0 };
+    scene.add(this.obj);
+  }
+  get pos() { return this.obj.position; }
+  get quat() { return this.obj.quaternion; }
+  targetable() { return this.alive && !this.warp && this.cloakLevel < 0.6; }
+  shieldCenterWorld(out = new V3()) { return out.copy(this.shieldC).applyQuaternion(this.quat).add(this.pos); }
+  toLocal(worldP, out = new V3()) { _q.copy(this.quat).invert(); return out.copy(worldP).sub(this.pos).applyQuaternion(_q); }
+  pointInShield(p) {
+    const l = this.toLocal(p, _t2).sub(this.shieldC), R = this.shieldR;
+    return (l.x / R.x) ** 2 + (l.y / R.y) ** 2 + (l.z / R.z) ** 2 < 1;
+  }
+  facingOf(worldP) {
+    const l = this.toLocal(worldP, _t3); const a = Math.atan2(l.x, l.z) / DEG;
+    if (Math.abs(a) <= 45) return 0; if (Math.abs(a) >= 135) return 2; return a > 0 ? 3 : 1;
+  }
+  // point where an attack coming from `from` lands: on the shield bubble, or on the hull
+  surfacePoint(from, onShield, jitter) {
+    const d = this.toLocal(from, new V3()).sub(this.shieldC).normalize(), R = this.shieldR;
+    let p;
+    if (onShield) { const k = 1 / Math.sqrt((d.x / R.x) ** 2 + (d.y / R.y) ** 2 + (d.z / R.z) ** 2); p = d.multiplyScalar(k); }
+    else { p = new V3(d.x * R.x, d.y * R.y, d.z * R.z).multiplyScalar(0.3); if (jitter) p.add(_t4.set(jitter.x * R.x, jitter.y * R.y, jitter.z * R.z).multiplyScalar(0.25)); }
+    return p.add(this.shieldC).applyQuaternion(this.quat).add(this.pos);
+  }
+  mountsInArc(kind, targetPos) {
+    const out = [];
+    for (const m of this.M.mounts[kind]) {
+      const wp = m.node.getWorldPosition(new V3());
+      const dw = _t1.copy(m.dir).applyQuaternion(this.quat);
+      const ang = dw.angleTo(_t2.subVectors(targetPos, wp));
+      if (ang <= m.arc) out.push({ m, wp, ang });
+    }
+    return out.sort((a, b) => a.ang - b.ang);
+  }
+  shieldHitFx(p) {
+    this.shieldMesh.updateMatrixWorld();
+    const l = this.shieldMesh.worldToLocal(p.clone()).normalize();
+    this.shieldMat.uniforms.uHits.value[this.hitIdx].set(l.x, l.y, l.z, 0);
+    this.hitIdx = (this.hitIdx + 1) % 6; this.shieldMesh.visible = true;
+  }
+  takeDamage(amount, from, hitP, attacker, fx = true) {
+    if (!this.alive || this.warp) return;
+    const f = this.facingOf(from);
+    let rem = amount; const prev = this.shields[f];
+    if (this.cloakLevel < 0.3 && prev > 0) {
+      const ab = Math.min(prev, rem); this.shields[f] -= ab; rem -= ab;
+      if (fx) { this.shieldHitFx(hitP); sfx.shieldHit(hitP); }
+    }
+    this.lastHit[f] = gameTime;
+    if (rem > 0) {
+      this.hull -= rem;
+      if (fx) { sparks(hitP, 10, [3, 1.8, 0.6], 35, 3); if (Math.random() < 0.3) flash(hitP, 10 * this.scale, 0xffaa55, 0.3); }
+      if (Math.random() < rem / this.hullMax * 6) {
+        const k = pick(Object.keys(this.systems)); const before = this.systems[k];
+        this.systems[k] = Math.max(0, before - rand(0.25, 0.6));
+        if (this.isPlayer && before > 0.3) { log(`${SYS_NAMES[k]} damaged!`, 'red'); sfx.alarm(); }
+      }
+    }
+    if (this.isPlayer) {
+      shake = Math.max(shake, Math.min(1.5, amount / 120));
+      hurtFlash = Math.min(1, hurtFlash + amount / 250);
+      if (prev > 0 && this.shields[f] <= 0) { log(`${FACING_NAMES[f]} shields have collapsed!`, 'red'); sfx.alarm(); }
+    }
+    if (attacker) { attacker.stats.dealt += amount; if (attacker !== this) this.lastAttacker = attacker; }
+    this.stats.taken += amount;
+    if (this.hull <= 0) { this.hull = 0; this.die(attacker); }
+  }
+  die(attacker) {
+    if (!this.alive) return;
+    this.alive = false; this.dying = 1.6; this.stopBeam(); this.shieldMesh.visible = false;
+    if (attacker) attacker.stats.kills++;
+    const who = this.isPlayer ? 'YOUR SHIP' : this.name;
+    log(this.isPlayer ? 'Warp core breach imminent! All hands abandon ship!' : `${who} destroyed!`, this.side === 0 ? 'red' : 'gold');
+    if (attacker && attacker.isPlayer && !this.isPlayer) log(pick(['Direct hit!', 'Target destroyed, Captain.', 'Enemy vessel destroyed.', 'Excellent shooting.']), 'green');
+  }
+  stopBeam() {
+    const b = this.beam; if (!b) return;
+    if (b.sound) { b.sound.stop(); b.sound = null; }
+    b.active = false; b.fx.forEach(f => f.hide());
+  }
+  cloak() {
+    if (!this.cls.cloak || this.cloakState !== 'none' || !this.alive) return false;
+    this.cloakState = 'cloaking'; this.stopBeam(); sfx.cloak(this.pos);
+    if (player && player.target === this) { player.target = null; log(`${this.name} has cloaked!`, 'gold'); }
+    return true;
+  }
+  decloak() { if (this.cloakState === 'cloaking' || this.cloakState === 'cloaked') { this.cloakState = 'decloaking'; sfx.cloak(this.pos); } }
+  applyCloakVisual() {
+    const L = this.cloakLevel, tr = L > 0.001;
+    for (const m of this.mats) {
+      if (m.userData.baseTransparent === undefined) m.userData.baseTransparent = m.transparent;
+      const want = tr || m.userData.baseTransparent;
+      if (m.transparent !== want) { m.transparent = want; m.needsUpdate = true; }
+      m.opacity = 1 - L; if (!m.userData.baseTransparent) m.depthWrite = L < 0.5;
+    }
+    this.visual.visible = L < 0.995 || Math.random() < 0.015; // faint shimmer
+  }
+  startWarpIn(end, lookAt) {
+    this.obj.position.copy(end); this.obj.lookAt(lookAt); this.obj.updateMatrixWorld();
+    this.f.set(0, 0, 1).applyQuaternion(this.quat);
+    this.warp = { t: 0, end: end.clone(), start: end.clone().addScaledVector(this.f, -5000) };
+    this.obj.position.copy(this.warp.start); this.speed = this.cls.speed * 0.6; this.input.throttle = 0.6;
+    sfx.warp(end);
+  }
+  update(dt) {
+    if (this.removed) return;
+    if (this.warp) {
+      const w = this.warp; w.t += dt / 0.9; const k = 1 - Math.pow(1 - Math.min(1, w.t), 3);
+      this.pos.lerpVectors(w.start, w.end, k); this.visual.scale.set(1, 1, 1 + 14 * (1 - k));
+      this.vel.copy(this.f).multiplyScalar(this.speed);
+      if (w.t >= 1) { this.warp = null; this.visual.scale.set(1, 1, 1); flash(this.pos, this.radius * 4, 0xbbd8ff, 0.7); sparks(this.pos, 40, [2, 2.6, 4], 120, 4); }
+      return;
+    }
+    if (!this.alive) {
+      this.pos.addScaledVector(this.vel, dt); this.vel.multiplyScalar(1 - dt * 0.3);
+      this.visual.rotation.z += dt * 0.4; this.visual.rotation.x += dt * 0.15;
+      this.dying -= dt; this.dieT -= dt;
+      if (this.dieT <= 0) { this.dieT = rand(0.12, 0.3); explode(this.surfacePoint(_t1.copy(this.pos).addScaledVector(randDir(), 100), false, randDir()), rand(5, 10) * this.scale); }
+      if (this.dying <= 0) {
+        const ring = this.faction === 'fed' ? 0x88bbff : this.faction === 'rom' ? 0x88ff99 : 0xffaa55;
+        explode(this.pos, this.radius * 0.55, true, ring); debris(this);
+        scene.remove(this.obj); this.removed = true;
+        this.beam && this.beam.fx.forEach(f => f.dispose());
+      }
+      return;
+    }
+    const c = this.cls, pm = POWER[this.power], inp = this.input;
+    const engF = pm.e * (0.4 + 0.6 * this.systems.engines);
+    // ---- helm ----
+    const maxSpd = c.speed * engF, tgtSpd = clamp(inp.throttle, -0.25, 1) * maxSpd;
+    const acc = c.accel * engF * dt;
+    this.speed += clamp(tgtSpd - this.speed, -acc * 1.5, acc);
+    const tr = c.turn * (0.6 + 0.4 * engF);
+    let roll = inp.roll;
+    if (this.autoLevel && Math.abs(roll) < 0.1) {
+      const xw = _t1.set(1, 0, 0).applyQuaternion(this.quat), uw = _t2.set(0, 1, 0).applyQuaternion(this.quat);
+      if (Math.abs(_t3.set(0, 0, 1).applyQuaternion(this.quat).y) < 0.9) roll = clamp(-xw.y * 2 * Math.sign(uw.y || 1), -1, 1) * 0.8;
+    }
+    const k = damp(3.2, dt);
+    this.angVel.x = lerp(this.angVel.x, inp.pitch * tr * 0.85, k);
+    this.angVel.y = lerp(this.angVel.y, inp.yaw * tr, k);
+    this.angVel.z = lerp(this.angVel.z, roll * tr * 1.5, k);
+    _q.setFromEuler(_e.set(this.angVel.x * dt, this.angVel.y * dt, this.angVel.z * dt));
+    this.quat.multiply(_q).normalize();
+    this.f.set(0, 0, 1).applyQuaternion(this.quat); this.u.set(0, 1, 0).applyQuaternion(this.quat); this.r.set(1, 0, 0).applyQuaternion(this.quat);
+    this.pos.addScaledVector(this.f, this.speed * dt).addScaledVector(this.drift, dt);
+    this.drift.multiplyScalar(1 - damp(1.2, dt));
+    this.vel.copy(this.f).multiplyScalar(this.speed).add(this.drift);
+    this.visual.rotation.z = lerp(this.visual.rotation.z, clamp(-this.angVel.y * 0.7, -0.6, 0.6), damp(3, dt));
+    // ---- weapons ----
+    if (this.beam) this.updateBeam(dt, pm);
+    if (this.pulse) this.updatePulse(dt, pm);
+    this.torp.ready = Math.min(1, this.torp.ready + dt / c.torp.reload * pm.w * (0.3 + 0.7 * this.systems.torps));
+    // ---- shields & damage control ----
+    if (c.regenHull) this.hull = Math.min(this.hullMax, this.hull + c.regenHull * dt);
+    const regen = this.shieldMax * 0.035 * pm.s * (0.25 + 0.75 * this.systems.shields) * dt;
+    for (let i = 0; i < 4; i++) if (gameTime - this.lastHit[i] > 2.5) this.shields[i] = Math.min(this.shieldMax, this.shields[i] + regen);
+    for (const s in this.systems) this.systems[s] = Math.min(1, this.systems[s] + dt * 0.022);
+    // ---- cloak ----
+    if (this.cloakState === 'cloaking') { this.cloakLevel = Math.min(1, this.cloakLevel + dt / 2); if (this.cloakLevel >= 1) this.cloakState = 'cloaked'; }
+    else if (this.cloakState === 'decloaking') { this.cloakLevel = Math.max(0, this.cloakLevel - dt / 1.5); if (this.cloakLevel <= 0) this.cloakState = 'none'; }
+    if (this.cloakState !== 'none' || this._lastCloak !== this.cloakLevel) { this.applyCloakVisual(); this._lastCloak = this.cloakLevel; }
+    // ---- visuals ----
+    const thr = Math.max(0.12, this.speed / c.speed);
+    for (const e of this.M.engines) e.scale.setScalar(e.userData.base * (0.5 + 0.9 * thr) * (0.9 + Math.random() * 0.2));
+    for (const b of this.M.blinkers) b.visible = ((gameTime + b.userData.phase) % 1.6) < 0.14;
+    const hits = this.shieldMat.uniforms.uHits.value; let any = false;
+    for (const h of hits) if (h.w < 1) { h.w += dt / 0.9; any = true; }
+    this.shieldMesh.visible = any && this.cloakLevel < 0.3;
+    if (this.hull < this.hullMax * 0.5 && this.cloakLevel < 0.5 && (this.fireT -= dt) < 0) {
+      this.fireT = lerp(0.03, 0.3, this.hull / (this.hullMax * 0.5));
+      const p = this.surfacePoint(_t1.copy(this.pos).addScaledVector(randDir(), 100), false, randDir());
+      particles.emit(p, _t2.copy(this.vel).multiplyScalar(0.9).addScaledVector(randDir(), 5), 0.8, 2.5 * this.scale, 7 * this.scale, [2.6, 1.1, 0.3], [0.4, 0.06, 0], 0.5);
+    }
+  }
+  updateBeam(dt, pm) {
+    const b = this.beam, c = this.cls.beam, t = this.wantBeam;
+    let firing = false;
+    if (t && t.targetable() && t !== this && this.cloakLevel === 0 && (b.active ? b.charge > 0 : b.charge > 0.25)) {
+      const d = this.pos.distanceTo(t.pos);
+      if (d < c.range + t.radius) {
+        const mounts = this.mountsInArc('beam', t.pos).slice(0, 2);
+        if (mounts.length) {
+          firing = true;
+          if (!b.active) { b.active = true; b.sound = sfx.beamStart(this.pos); b.off.copy(randDir()); b.hitT = 0; }
+          b.charge = Math.max(0, b.charge - dt / c.dur);
+          const rangeF = lerp(1, 0.5, clamp(d / c.range, 0, 1));
+          const dmg = c.dps * dt * pm.w * (0.4 + 0.6 * this.systems.weapons) * rangeF * this.dmgMult;
+          const onShield = t.cloakLevel < 0.3 && t.shields[t.facingOf(this.pos)] > 0;
+          const end = t.surfacePoint(this.pos, onShield, b.off);
+          mounts.forEach((m, i) => { const fx = b.fx[i] || (b.fx[i] = new BeamFx(c.color, c.width * this.scale)); fx.set(m.wp, end); });
+          for (let i = mounts.length; i < b.fx.length; i++) b.fx[i].hide();
+          b.hitT -= dt; const doFx = b.hitT <= 0; if (doFx) b.hitT = 0.15;
+          t.takeDamage(dmg, this.pos, end, this, doFx);
+          if (b.sound) b.sound.setPos(this.pos);
+        }
+      }
+    }
+    if (!firing) {
+      if (b.active) this.stopBeam();
+      b.charge = Math.min(1, b.charge + dt / c.recharge * pm.w * (0.3 + 0.7 * this.systems.weapons));
+    }
+  }
+  updatePulse(dt, pm) {
+    const p = this.pulse, c = this.cls.pulse;
+    p.cd -= dt;
+    p.energy = Math.min(1, p.energy + dt * c.regen * pm.w * (0.3 + 0.7 * this.systems.weapons) * (this.wantPulse ? 0.4 : 1));
+    if (this.wantPulse && p.cd <= 0 && p.energy >= c.cost && this.cloakLevel === 0) {
+      const mounts = this.M.mounts.pulse, m = mounts[p.idx++ % mounts.length];
+      const wp = m.node.getWorldPosition(new V3());
+      let dir = this.f.clone();
+      const t = this.target;
+      if (t && t.targetable()) { const aim = leadPoint(wp, t, c.speed).sub(wp).normalize(); if (aim.angleTo(dir) < m.arc) dir = aim; }
+      if (this.aimErr) dir.addScaledVector(randDir(), Math.tan(this.aimErr * DEG)).normalize();
+      projectiles.push(new Projectile({
+        kind: 'bolt', owner: this, side: this.side, pos: wp.clone(), vel: dir.multiplyScalar(c.speed).add(this.vel),
+        dmg: c.dmg * pm.w * (0.4 + 0.6 * this.systems.weapons) * this.dmgMult, life: c.range / c.speed, color: c.color, width: c.width * this.scale
+      }));
+      p.energy -= c.cost; p.cd = c.interval / (0.7 + 0.3 * pm.w);
+      flash(wp, 8 * this.scale, c.color, 0.12);
+      if (this.faction === 'fed') sfx.pulsePhaser(wp); else sfx.disruptor(wp);
+    }
+  }
+  fireTorpedo(target) {
+    const c = this.cls.torp;
+    if (this.cloakLevel > 0) return 'cloaked';
+    if (this.torp.ammo <= 0) return 'empty';
+    if (this.torp.ready < 1) return 'reload';
+    let arr = [];
+    if (target && target.targetable()) {
+      arr = this.mountsInArc('torp', target.pos); if (!arr.length) return 'arc';
+    }
+    const count = Math.min(c.salvo || 1, this.torp.ammo);
+    const pm = POWER[this.power];
+    for (let i = 0; i < count; i++) {
+      let wp, dir, tg = null;
+      if (arr.length) {
+        const m = arr[i % arr.length]; wp = m.wp.clone();
+        dir = leadPoint(wp, target, c.speed).sub(wp).normalize(); tg = target;
+      } else {
+        const m = this.M.mounts.torp[i % this.M.mounts.torp.length]; wp = m.node.getWorldPosition(new V3()); dir = this.f.clone();
+      }
+      if (count > 1) wp.addScaledVector(this.r, (i - (count - 1) * 0.5) * 6 * this.scale);
+      if (this.aimErr) dir.addScaledVector(randDir(), Math.tan(this.aimErr * 1.5 * DEG)).normalize();
+      projectiles.push(new Projectile({
+        kind: 'torp', owner: this, side: this.side, pos: wp, vel: dir.multiplyScalar(c.speed * 0.5).add(this.vel), speed: c.speed, turn: c.turn,
+        dmg: c.dmg * (0.6 + 0.4 * pm.w) * this.dmgMult, life: 7, color: c.color, size: c.size * Math.max(0.9, this.scale * 0.9), target: tg, plasma: !!c.plasma
+      }));
+      this.torp.ammo--; this.stats.torpsFired++;
+      flash(wp, c.size * 4, c.color, 0.3);
+    }
+    this.torp.ready = 0;
+    sfx.torpedo(this.pos, !!c.plasma);
+    return 'ok';
+  }
+}
+
+/* =====================================================================
+   COMPUTER PLAYER AI
+   ===================================================================== */
+function hostilesOf(s) { return ships.filter(o => o.side !== s.side && o.targetable()); }
+function nearestHostile(s) {
+  let best = null, bd = Infinity;
+  for (const o of hostilesOf(s)) { const d = o.pos.distanceTo(s.pos) * (o.isPlayer ? 0.75 : 1); if (d < bd) { bd = d; best = o; } }
+  return best;
+}
+function steer(s, dir) {
+  const l = _t4.copy(dir).applyQuaternion(_q.copy(s.quat).invert());
+  const yawErr = Math.atan2(l.x, l.z), pitchErr = Math.atan2(l.y, Math.hypot(l.x, l.z));
+  s.input.yaw = clamp(yawErr * 2.5, -1, 1); s.input.pitch = clamp(-pitchErr * 2.5, -1, 1); s.input.roll = 0;
+}
+class AI {
+  constructor(ship, react) {
+    this.s = ship; this.react = react; this.state = 'attack'; this.timer = 0; this.retarget = 0;
+    this.cloakCd = rand(10, 18); this.evade = new V3(); this.orbit = Math.random() < 0.5 ? 1 : -1; this.torpDelay = rand(0.5, 2);
+  }
+  update(dt) {
+    const s = this.s, prof = s.cls.ai;
+    this.retarget -= dt; this.timer -= dt; this.cloakCd -= dt;
+    let t = s.target;
+    if (!t || !t.targetable() || this.retarget <= 0) { t = s.target = nearestHostile(s); this.retarget = rand(3, 6); }
+    if (s.lastAttacker && s.lastAttacker.targetable() && s.lastAttacker !== t && Math.random() < dt * 0.3) t = s.target = s.lastAttacker;
+    const desired = new V3(); let throttle = 0.7;
+    s.wantBeam = null; s.wantPulse = false;
+    if (this.state === 'cloaked') {
+      const victim = t || nearestHostile(s);
+      if (victim) {
+        const ambush = _t1.copy(victim.pos).addScaledVector(victim.f, -450).addScaledVector(victim.u, 80);
+        desired.subVectors(ambush, s.pos); throttle = 1;
+        if (this.timer <= 0 || desired.length() < 200) { s.decloak(); this.state = 'attack'; this.torpDelay = 0.4; }
+        desired.normalize();
+      } else { s.decloak(); this.state = 'attack'; }
+    } else if (!t) {
+      desired.copy(s.pos).negate(); if (desired.lengthSq() < 1e4) desired.copy(s.f); desired.normalize(); throttle = 0.4;
+    } else {
+      const to = _t2.subVectors(t.pos, s.pos); const dist = to.length(); to.divideScalar(dist || 1);
+      if (prof === 'raider' || prof === 'escort') {
+        if (this.state === 'attack') {
+          const spd = s.pulse ? s.cls.pulse.speed : 900;
+          desired.copy(leadPoint(s.pos, t, spd)).sub(s.pos).normalize(); throttle = dist > 600 ? 1 : 0.8;
+          if (dist < 200 + t.radius + s.radius) { this.state = 'break'; this.timer = rand(2.5, 4); this.evade.copy(randDir()).addScaledVector(to, -0.8).normalize(); }
+        } else {
+          desired.copy(this.evade); throttle = 1;
+          if (this.timer <= 0) this.state = 'attack';
+        }
+      } else if (prof === 'cruiser') {
+        const ideal = 520;
+        const side = _t3.crossVectors(to, s.u).normalize().multiplyScalar(this.orbit);
+        if (dist > ideal + 220) desired.copy(to);
+        else if (dist < ideal - 250) desired.copy(to).negate().add(side).normalize();
+        else desired.copy(side).addScaledVector(to, (dist - ideal) / 300).normalize();
+        if ((s.torp.ready >= 1 || (s.pulse && s.pulse.energy > 0.6)) && dist > 250) desired.lerp(to, 0.7).normalize();
+        throttle = 0.75;
+        if (Math.random() < dt * 0.05) this.orbit *= -1;
+      } else {
+        const ideal = 750;
+        if (dist > ideal + 200) { desired.copy(to); throttle = 0.8; }
+        else if (dist < 420) { desired.copy(to).negate().add(_t3.crossVectors(to, s.u).normalize()).normalize(); throttle = 1; }
+        else { desired.copy(to); throttle = 0.25; }
+      }
+      // ---- weapons ----
+      if (s.beam && (s.beam.charge > 0.55 || s.beam.active) && dist < s.cls.beam.range) s.wantBeam = t;
+      if (s.pulse && dist < s.cls.pulse.range) {
+        const ang = s.f.angleTo(to);
+        if (ang < s.M.mounts.pulse[0].arc * 1.5 && (s.pulse.energy > 0.35 || this.burst)) { s.wantPulse = true; this.burst = s.pulse.energy > s.cls.pulse.cost; }
+        else this.burst = false;
+      }
+      this.torpDelay -= dt * this.react;
+      if (s.torp.ready >= 1 && dist < 1100 && dist > 120 && this.torpDelay <= 0) {
+        if (s.fireTorpedo(t) === 'ok') this.torpDelay = rand(0.5, 2.5);
+      }
+      // ---- cloaking tactics ----
+      if (s.cls.cloak && this.cloakCd <= 0 && s.cloakState === 'none') {
+        const weak = Math.min(...s.shields) < s.shieldMax * 0.3;
+        if ((prof === 'raider' && (this.state === 'break' || weak)) || (prof === 'battleship' && (weak || s.hull < s.hullMax * 0.6) && Math.random() < dt * 0.5)) {
+          if (s.cloak()) { this.state = 'cloaked'; this.timer = rand(5, 9); this.cloakCd = rand(18, 30); }
+        }
+      }
+    }
+    for (const o of ships) {
+      if (o === s || !o.alive || o.warp) continue;
+      const away = _t3.subVectors(s.pos, o.pos), d = away.length(), lim = (s.radius + o.radius) * 1.6;
+      if (d < lim && d > 0.01) desired.addScaledVector(away.divideScalar(d), (1 - d / lim) * 2.5);
+    }
+    if (s.pos.length() > ARENA * 0.85) desired.addScaledVector(_t3.copy(s.pos).normalize(), -2);
+    if (desired.lengthSq() < 1e-6) desired.copy(s.f);
+    steer(s, desired.normalize()); s.input.throttle = throttle;
+  }
+}
+
+/* =====================================================================
+   MISSIONS (25 SCENARIOS)
+   ===================================================================== */
+const MISSIONS = [
+  { name: 'BORDER SKIRMISH', desc: 'Two Klingon Birds-of-Prey have crossed into Federation space. Drive them off. They will cloak, so watch your flanks.', enemies: ['bop', 'bop'] },
+  { name: 'KLINGON STRIKE GROUP', desc: "A K't'inga battle cruiser leads two Birds-of-Prey toward a Federation colony. A Constitution-class cruiser will support you.", enemies: ['ktinga', 'bop', 'bop'], allies: ['constitution'] },
+  { name: 'NEUTRAL ZONE INCIDENT', desc: "A Romulan D'deridex Warbird has decloaked near the Neutral Zone. Keep your distance from its plasma torpedoes, or dodge them.", enemies: ['warbird'] },
+  { name: 'FLEET ENGAGEMENT', desc: 'A joint Klingon–Romulan battle group is attacking. Lead a Starfleet task force into battle.', enemies: ['warbird', 'ktinga', 'bop', 'bop'], allies: ['galaxy', 'defiant'] },
+  { name: 'KOBAYASHI MARU', desc: 'The no-win scenario. Wave after wave of enemy ships, getting harder each time. How long can you last?', survival: true },
+  { name: 'PATROL AT CETI ALPHA', desc: 'A rogue Klingon raider pack is harassing freighter lanes in the Ceti Alpha sector. Intercept them alongside a Miranda-class patrol cruiser.', enemies: ['bop', 'bop', 'bop'], allies: ['miranda'] },
+  { name: 'KHITOMER CONVOY ESCORT', desc: 'Protect an Excelsior-class diplomatic vessel against a Klingon ambush force on the border.', enemies: ['ktinga', 'ktinga', 'bop'], allies: ['excelsior'] },
+  { name: 'NARENDRA CLOAK TRAP', desc: 'A Romulan Warbird and two mercenary Birds-of-Prey have sprung a sensor trap in the Narendra sector.', enemies: ['warbird', 'bop', 'bop'], allies: ['excelsior'] },
+  { name: 'CARDASSIAN BORDER CLASH', desc: 'Two Cardassian Galor-class cruisers have crossed into the Demilitarized Zone near Minos Korva. Repel the incursion.', enemies: ['galor', 'galor'], allies: ['miranda'] },
+  { name: 'BADLANDS RECONNAISSANCE', desc: 'A Nova-class scout discovered a Cardassian patrol squadron staging in the Badlands. Eliminate the hostile cruisers.', enemies: ['galor', 'galor', 'galor'], allies: ['nova', 'freedom'] },
+  { name: 'BATTLE OF WOLF 359', desc: 'A Borg Tactical Cube has entered the Sol system! Join the Freedom-, Miranda-, and Excelsior-class defense line to stop the Collective.', enemies: ['borgcube'], allies: ['freedom', 'miranda', 'excelsior'] },
+  { name: 'GAMMA QUADRANT CONTACT', desc: 'Three Dominion Jem\'Hadar Attack Ships ambush your patrol wing near the Bajoran wormhole.', enemies: ['jemhadar', 'jemhadar', 'jemhadar'], allies: ['nova'] },
+  { name: 'THE DIE IS CAST', desc: 'Caught between a Romulan Warbird and two Cardassian Galor-class cruisers in the Omarion Nebula. Fight your way out!', enemies: ['warbird', 'galor', 'galor'], allies: ['defiant'] },
+  { name: 'WAY OF THE WARRIOR', desc: 'A Klingon assault force led by a Negh\'Var heavy dreadnought is attacking Deep Space 9\'s perimeter.', enemies: ['neghvar', 'ktinga', 'bop', 'bop'], allies: ['defiant', 'steamrunner'] },
+  { name: 'ARCHANIS SECTOR DEFENSE', desc: 'Hold the Archanis sector with an Akira and Steamrunner strike group against a Klingon invasion squadron.', enemies: ['ktinga', 'ktinga', 'bop', 'bop', 'bop'], allies: ['akira', 'steamrunner'] },
+  { name: 'PROJECT PROMETHEUS', desc: 'Romulan Warbirds attempt to intercept the experimental U.S.S. Prometheus. Engage Multi-Vector Assault Mode (Press G) and defeat them!', enemies: ['warbird', 'warbird'], allies: ['prometheus', 'intrepid'] },
+  { name: 'BATTLE OF SECTOR 001', desc: 'A Borg Cube approaches Earth! Fight alongside Sovereign-, Akira-, Steamrunner-, and Defiant-class starships to destroy the Cube.', enemies: ['borgcube'], allies: ['sovereign', 'akira', 'steamrunner', 'defiant'] },
+  { name: 'CALL TO ARMS', desc: 'A combined Dominion–Cardassian strike wing launches the opening assault of the Dominion War.', enemies: ['galor', 'galor', 'jemhadar', 'jemhadar', 'jemhadar'], allies: ['akira', 'defiant'] },
+  { name: 'OPERATION RETURN', desc: 'Pierce the Dominion blockade of four Jem\'Hadar Attack Ships and two Cardassian Galor cruisers to retake the station.', enemies: ['galor', 'galor', 'jemhadar', 'jemhadar', 'jemhadar', 'jemhadar'], allies: ['galaxy', 'defiant', 'miranda'] },
+  { name: 'LIBERATION OF BETAZED', desc: 'Lead a high-speed strike wing with Intrepid and Defiant escorts to liberate Betazed from Dominion occupation.', enemies: ['galor', 'galor', 'jemhadar', 'jemhadar', 'jemhadar'], allies: ['intrepid', 'defiant', 'freedom'] },
+  { name: 'FIRST BATTLE OF CHIN\'TOKA', desc: 'Spearhead the Allied offensive into the Chin\'toka system against heavy Cardassian and Dominion defenses.', enemies: ['galor', 'galor', 'galor', 'jemhadar', 'jemhadar', 'jemhadar'], allies: ['sovereign', 'akira', 'steamrunner'] },
+  { name: 'SIEGE OF AR-558', desc: 'Hold the supply corridor against relentless Jem\'Hadar attack squadrons with Nova and Miranda support ships.', enemies: ['jemhadar', 'jemhadar', 'jemhadar', 'jemhadar', 'jemhadar'], allies: ['nova', 'miranda'] },
+  { name: 'BATTLE OF CARDASSIA PRIME', desc: 'Final assault of the Dominion War! Lead a Starfleet battle group against the Dominion–Cardassian home defense fleet.', enemies: ['galor', 'galor', 'galor', 'jemhadar', 'jemhadar', 'jemhadar', 'jemhadar'], allies: ['sovereign', 'galaxy', 'defiant', 'akira'] },
+  { name: 'TYPHON EXPANSE DREADNOUGHTS', desc: 'Two Klingon Negh\'Var dreadnoughts and their escorts test Starfleet\'s Kirov-class guided-weapon battlecruisers.', enemies: ['neghvar', 'neghvar', 'ktinga', 'bop', 'bop'], allies: ['kirov', 'prometheus'] },
+  { name: 'OMEGA DIRECTIVE: BORG ARMADA', desc: 'Two Borg Tactical Cubes and an assimilated Negh\'Var dreadnought invade Federation space. Mobilize the Inquiry and Kirov battlecruisers!', enemies: ['borgcube', 'borgcube', 'neghvar'], allies: ['inquiry', 'kirov', 'sovereign', 'prometheus'] }
+];
+const WAVES = [['bop'], ['bop', 'bop'], ['ktinga'], ['jemhadar', 'jemhadar'], ['galor', 'bop'], ['warbird'], ['ktinga', 'bop', 'bop'], ['neghvar', 'bop'], ['warbird', 'galor'], ['borgcube'], ['neghvar', 'warbird', 'jemhadar', 'jemhadar']];
+const PLAYER_SHIPS = SHIP_CATEGORIES.flatMap(c => c.ships);
+
+let selShip = 'constitution', selMission = 0, difficulty = 1, invertPitch = false;
+let mission = null, pending = [], endTimer = -1, endResult = null, wave = 0, waveTimer = -1, hailed = {};
+let camMode = 0, camYaw = 0, camPitch = 0, camZoom = 1, lastDrag = -1e9, dragging = null;
+let hurtFlash = 0, lastWarn = {}, mvamShips = [];
+const keys = {};
+const usedNames = new Set();
+
+/* =====================================================================
+   CUSTOM KEYBINDINGS & PAUSE MENU SETTINGS
+   ===================================================================== */
+const DEFAULT_BINDS = {
+  pitchUp: 'KeyW',
+  pitchDown: 'KeyS',
+  throttleUp: 'KeyE',
+  throttleDown: 'KeyQ',
+  rollLeft: 'KeyC',
+  rollRight: 'KeyV',
+  yawLeft: 'KeyA',
+  yawRight: 'KeyD',
+  allStop: 'KeyX',
+  autoLevel: 'KeyL',
+  fire: 'Space',
+  torpedo: 'KeyT',
+  special: 'KeyG',
+  cycleTarget: 'Tab',
+  nearestTarget: 'KeyR',
+  camera: 'KeyB'
+};
+const BIND_LABELS = [
+  ['pitchUp', 'Climb (Pitch Up)'],
+  ['pitchDown', 'Dive (Pitch Down)'],
+  ['throttleUp', 'Impulse Throttle Up'],
+  ['throttleDown', 'Impulse Throttle Down'],
+  ['rollLeft', 'Roll Left'],
+  ['rollRight', 'Roll Right'],
+  ['yawLeft', 'Yaw Left (Turn Port)'],
+  ['yawRight', 'Yaw Right (Turn Stbd)'],
+  ['allStop', 'All Stop'],
+  ['autoLevel', 'Toggle Auto-Level'],
+  ['fire', 'Fire Phasers / Cannons'],
+  ['torpedo', 'Launch Torpedo'],
+  ['special', 'Special / MVAM Split'],
+  ['cycleTarget', 'Cycle Hostile Targets'],
+  ['nearestTarget', 'Lock Nearest Hostile'],
+  ['camera', 'Cycle Camera View']
+];
+let binds = { ...DEFAULT_BINDS };
+try {
+  const saved = JSON.parse(localStorage.getItem('sft_binds') || 'null');
+  if (saved && typeof saved === 'object') binds = { ...DEFAULT_BINDS, ...saved };
+} catch (_) {}
+let rebindingKey = null;
+
+function keyLabel(code) {
+  if (!code) return 'NONE';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  const map = { Space: 'SPACE', Tab: 'TAB', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', ShiftLeft: 'L-SHIFT', ShiftRight: 'R-SHIFT', ControlLeft: 'L-CTRL', ControlRight: 'R-CTRL', Backspace: 'BKSP', Enter: 'ENTER' };
+  return map[code] || code.toUpperCase();
+}
+function saveBinds() {
+  try { localStorage.setItem('sft_binds', JSON.stringify(binds)); } catch (_) {}
+  renderKeybindUI();
+  updateHudKeyHints();
+}
+function updateHudKeyHints() {
+  $('hud-keys-helm').innerHTML = `1 BAL · 2 WEAP · 3 SHLD · 4 ENG &nbsp;|&nbsp; ${keyLabel(binds.throttleUp)}/${keyLabel(binds.throttleDown)} THROTTLE · ${keyLabel(binds.pitchUp)}/${keyLabel(binds.pitchDown)} PITCH · ${keyLabel(binds.rollLeft)}/${keyLabel(binds.rollRight)} ROLL · ${keyLabel(binds.allStop)} STOP`;
+  $('hud-keys-weap').innerHTML = `${keyLabel(binds.fire)} FIRE · ${keyLabel(binds.torpedo)}/RMB TORP · ${keyLabel(binds.special)} MVAM · ${keyLabel(binds.cycleTarget)}/${keyLabel(binds.nearestTarget)} TARGET`;
+  $('keys-hint').innerHTML = `H / ESC — PAUSE &amp; CONTROLS · ${keyLabel(binds.camera)} — CAMERA`;
+}
+function renderKeybindUI() {
+  const grid = $('keybind-grid'); if (!grid) return;
+  grid.innerHTML = BIND_LABELS.map(([k, label]) =>
+    `<div class="kb-row"><span>${label}</span><button class="kb-btn ${rebindingKey === k ? 'wait' : ''}" data-k="${k}">${rebindingKey === k ? 'PRESS KEY…' : keyLabel(binds[k])}</button></div>`
+  ).join('');
+  grid.querySelectorAll('.kb-btn').forEach(btn => {
+    btn.onclick = () => {
+      sfx.init(); sfx.beep(1300);
+      rebindingKey = rebindingKey === btn.dataset.k ? null : btn.dataset.k;
+      renderKeybindUI();
+    };
+  });
+}
+
+/* ---------- messages ---------- */
+function log(text, cls = '') {
+  if (!text) return;
+  const el = document.createElement('div'); el.className = 'msg ' + cls; el.textContent = text;
+  const box = $('log'); box.appendChild(el);
+  while (box.children.length > 5) box.removeChild(box.firstChild);
+  setTimeout(() => el.classList.add('fade'), 4500); setTimeout(() => el.remove(), 6000);
+}
+function warnOnce(key, text, cls = '', cd = 4) { if ((lastWarn[key] ?? -99) + cd > gameTime) return; lastWarn[key] = gameTime; log(text, cls); }
+let bannerTO = 0;
+function banner(big, small, dur = 3, color = '#ff4433') {
+  const b = $('banner-big'); b.textContent = big; b.style.color = color; b.style.textShadow = `0 0 24px ${color}`;
+  $('banner-small').textContent = small; $('banner').classList.add('show');
+  clearTimeout(bannerTO); bannerTO = setTimeout(() => $('banner').classList.remove('show'), dur * 1000);
+}
+
+/* ---------- spawning & Multi-Vector Assault Mode (MVAM) ---------- */
+function uniqueName(f) {
+  const pool = NAMES[f].filter(n => !usedNames.has(n));
+  const n = pool.length ? pick(pool) : `${pick(NAMES[f])}-${(Math.random() * 90 + 10) | 0}`;
+  usedNames.add(n); return n;
+}
+function spawnShip(cls, side, name, isPlayer = false) {
+  const s = new Ship(cls, side, name, isPlayer);
+  if (!isPlayer) {
+    const D = DIFF[difficulty];
+    s.ai = new AI(s, side === 1 ? D.react : 0.85);
+    s.dmgMult = side === 1 ? D.dmg : 0.85; s.aimErr = side === 1 ? D.err : 2.5;
+  }
+  ships.push(s); return s;
+}
+function toggleSpecial() {
+  if (!player || !player.alive || state !== 'playing') return;
+  if (!player.cls.mvam) {
+    log('Multi-Vector Assault Mode is only available on the Prometheus Class.', 'gold');
+    return;
+  }
+  const activeVectors = mvamShips.filter(s => s.alive && !s.removed);
+  if (activeVectors.length > 0) {
+    activeVectors.forEach(s => {
+      flash(s.pos, s.radius * 3, 0x88ccff, 0.5);
+      s.stopBeam(); s.beam && s.beam.fx.forEach(f => f.dispose());
+      scene.remove(s.obj); s.removed = true; s.alive = false;
+    });
+    mvamShips = [];
+    player.scale = player.cls.scale; player.M.group.scale.setScalar(player.scale);
+    flash(player.pos, player.radius * 4, 0x88ccff, 0.7); sfx.warp(player.pos);
+    log('Multi-Vector sections re-integrated. All systems nominal.', 'green');
+  } else {
+    flash(player.pos, player.radius * 4, 0xffaa44, 0.7); sfx.warp(player.pos);
+    banner('MULTI-VECTOR ASSAULT MODE', 'ALPHA · BETA · GAMMA VECTORS ENGAGED', 2.4, '#66ccff');
+    log('Multi-Vector Assault Mode engaged! Beta and Gamma vectors separating!', 'green');
+    for (const [label, sideOff, upOff] of [['Beta Vector', -55, 18], ['Gamma Vector', 55, -18]]) {
+      const v = spawnShip('prometheus', 0, `Prometheus (${label})`);
+      v.scale = 0.72; v.M.group.scale.setScalar(0.72);
+      v.hullMax = v.hull = 650; v.shieldMax = 420; v.shields.fill(420);
+      v.pos.copy(player.pos).addScaledVector(player.r, sideOff).addScaledVector(player.u, upOff);
+      v.quat.copy(player.quat); v.speed = player.speed; v.input.throttle = 0.85;
+      flash(v.pos, v.radius * 3, 0x88ccff, 0.5);
+      mvamShips.push(v);
+    }
+  }
+}
+function warpInEnemy(cls) {
+  const f = CLASSES[cls].faction, s = spawnShip(cls, 1, uniqueName(f));
+  const base = player && player.alive ? player.pos.clone() : new V3();
+  const fwd = player ? player.f : new V3(0, 0, 1);
+  const dir = fwd.clone().multiplyScalar(0.8).add(randDir().multiplyScalar(0.9)); dir.y *= 0.35; dir.normalize();
+  const end = base.clone().addScaledVector(dir, rand(1300, 1800));
+  if (end.length() > ARENA * 0.8) end.setLength(ARENA * 0.8);
+  s.startWarpIn(end, base);
+  return s;
+}
+function queueEnemies(list, delay) { list.forEach((cls, i) => pending.push({ t: gameTime + delay + i * 0.8, cls })); }
+
+function clearBattle() {
+  ships.forEach(s => { s.stopBeam(); if (s.beam) s.beam.fx.forEach(f => f.dispose()); scene.remove(s.obj); });
+  projectiles.forEach(p => p.dispose()); fxList.forEach(f => scene.remove(f.obj));
+  ships = []; projectiles = []; fxList = []; pending = []; mvamShips = []; player = null;
+  particles.clear(); usedNames.clear(); $('log').innerHTML = '';
+}
+function startMission() {
+  sfx.init(); clearBattle(); hideMenuModel();
+  mission = MISSIONS[selMission];
+  gameTime = 0; endTimer = -1; endResult = null; wave = 0; waveTimer = -1; lastWarn = {}; hailed = {}; hurtFlash = 0;
+  player = spawnShip(selShip, 0, CLASSES[selShip].registry, true);
+  player.input.throttle = 0.35; player.speed = player.cls.speed * 0.3;
+  (mission.allies || []).forEach((c, i) => {
+    const a = spawnShip(c, 0, uniqueName('fed'));
+    a.pos.set((i % 2 ? -1 : 1) * (170 + i * 60), rand(-30, 30), -130 - i * 50);
+    a.input.throttle = 0.35; a.speed = a.cls.speed * 0.3;
+  });
+  if (mission.survival) nextWave(); else queueEnemies(mission.enemies, 3);
+  const w = player.cls.beam || player.cls.pulse;
+  $('w1-name').textContent = player.cls.beam && player.cls.pulse ? 'ARRAYS+PULSE' : w.name;
+  $('w2-name').textContent = player.cls.torp.name;
+  $('ship-name').textContent = player.name.toUpperCase(); $('ship-class').textContent = `${player.cls.name} · ${player.cls.sub}`.toUpperCase();
+  updateHudKeyHints();
+  camYaw = camPitch = 0; camMode = 0; camSnap = true;
+  state = 'playing';
+  $('menu').classList.add('hidden'); $('endscreen').classList.add('hidden'); $('help').classList.add('hidden'); $('hud').classList.remove('hidden');
+  banner('RED ALERT', mission.name, 3.2); sfx.klaxon();
+  setTimeout(() => log(mission.desc, 'blue'), 600);
+}
+function nextWave() {
+  wave++;
+  const list = wave <= WAVES.length ? WAVES[wave - 1] : Array.from({ length: Math.min(6, 2 + Math.floor(wave / 3)) }, () => pick(['bop', 'ktinga', 'galor', 'jemhadar', 'warbird', 'neghvar']));
+  queueEnemies(list, 3);
+  banner(`WAVE ${wave}`, `${list.length} HOSTILE CONTACT${list.length > 1 ? 'S' : ''} INBOUND`, 2.6);
+  if (wave > 1 && player && player.alive) {
+    player.hull = Math.min(player.hullMax, player.hull + player.hullMax * 0.3);
+    player.torp.ammo += 12; player.shields.fill(player.shieldMax);
+  }
+}
+function goMenu() {
+  clearBattle(); state = 'menu';
+  $('hud').classList.add('hidden'); $('endscreen').classList.add('hidden'); $('help').classList.add('hidden'); $('menu').classList.remove('hidden');
+  $('vignette').style.opacity = 0;
+  showMenuModel();
+}
+function showEnd() {
+  state = 'over';
+  const win = endResult === 'win', p = player, t = Math.floor(gameTime);
+  $('end-box').className = 'box ' + (win ? 'win' : 'lose');
+  $('end-title').textContent = win ? 'MISSION ACCOMPLISHED' : mission.survival ? 'SIMULATION ENDED' : 'MISSION FAILED';
+  $('end-text').textContent = win ? 'All hostile vessels have been destroyed. Starfleet Command sends its congratulations, Captain.'
+    : mission.survival ? `You survived ${Math.max(0, wave - 1)} full wave${wave - 1 === 1 ? '' : 's'}. "I don't believe in the no-win scenario."`
+    : 'Your ship was destroyed with all hands lost... luckily this was only a simulation. Try again, Captain.';
+  $('end-stats').innerHTML = `MISSION TIME: <span>${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}</span><br>
+    ENEMIES DESTROYED: <span>${p.stats.kills}</span>${mission.survival ? `<br>WAVES SURVIVED: <span>${Math.max(0, wave - 1)}</span>` : ''}<br>
+    DAMAGE DEALT: <span>${Math.round(p.stats.dealt)}</span> · DAMAGE TAKEN: <span>${Math.round(p.stats.taken)}</span><br>
+    TORPEDOES: <span>${p.stats.torpsHit} / ${p.stats.torpsFired}</span> HITS · DIFFICULTY: <span>${DIFF[difficulty].name}</span>`;
+  $('hud').classList.add('hidden'); $('endscreen').classList.remove('hidden');
+}
+
+/* =====================================================================
+   PLAYER CONTROL & TARGETING
+   ===================================================================== */
+function autoTarget(announce) {
+  if (!player || !player.alive) return;
+  let best = null, bs = Infinity;
+  for (const o of hostilesOf(player)) {
+    const to = _t1.subVectors(o.pos, player.pos), d = to.length();
+    const sc = d * (1 + player.f.angleTo(to));
+    if (sc < bs) { bs = sc; best = o; }
+  }
+  if (best && best !== player.target) { player.target = best; sfx.beep(); log(`Target locked: ${best.name}`, 'gold'); }
+  else if (!best && announce) log('No targets in sensor range.');
+}
+function cycleTarget() {
+  if (!player || !player.alive) return;
+  const list = hostilesOf(player).sort((a, b) => a.pos.distanceTo(player.pos) - b.pos.distanceTo(player.pos));
+  if (!list.length) { log('No targets in sensor range.'); return; }
+  const i = list.indexOf(player.target); player.target = list[(i + 1) % list.length];
+  sfx.beep(); log(`Target locked: ${player.target.name}`, 'gold');
+}
+function clickSelect(x, y) {
+  if (!player || !player.alive) return;
+  let best = null, bd = 80;
+  for (const o of hostilesOf(player)) { const p = project(o.pos); if (p.behind) continue; const d = Math.hypot(p.x - x, p.y - y); if (d < bd) { bd = d; best = o; } }
+  if (best) { player.target = best; sfx.beep(); log(`Target locked: ${best.name}`, 'gold'); }
+}
+function playerTorpedo() {
+  if (!player || !player.alive || state !== 'playing') return;
+  if (!player.target) autoTarget();
+  const r = player.fireTorpedo(player.target);
+  const M = { arc: 'Target is outside torpedo arc.', reload: 'Torpedo tubes reloading...', empty: 'Torpedo magazine empty!' };
+  if (r === 'ok') { if (Math.random() < 0.35) log(pick(['Torpedo away!', 'Firing torpedoes.', 'Torpedo salvo launched.']), 'blue'); }
+  else if (M[r]) warnOnce('torp' + r, M[r], '', 1.5);
+}
+function setPower(m) {
+  if (!player || !player.alive) return;
+  player.power = m; sfx.beep(m === 'bal' ? 1000 : 1400);
+  log(m === 'bal' ? 'Power distribution balanced.' : `Diverting auxiliary power to ${POWER[m].label.toLowerCase()}.`, 'blue');
+}
+function updatePlayer(dt) {
+  const p = player; if (!p || !p.alive) return;
+  const inp = p.input;
+  // Yaw: custom yawLeft/yawRight + ArrowLeft/ArrowRight fallback
+  inp.yaw = ((keys[binds.yawLeft] || keys.ArrowLeft) ? 1 : 0) - ((keys[binds.yawRight] || keys.ArrowRight) ? 1 : 0);
+  // Pitch: W = Climb (nose up, negative X rotation in local frame), S = Dive (nose down, positive X rotation)
+  const climb = (keys[binds.pitchUp] || keys.ArrowUp) ? 1 : 0;
+  const dive = (keys[binds.pitchDown] || keys.ArrowDown) ? 1 : 0;
+  let pt = dive - climb;
+  if (invertPitch) pt = -pt;
+  inp.pitch = pt;
+  // Roll: C = Roll Left, V = Roll Right
+  inp.roll = (keys[binds.rollRight] ? 1 : 0) - (keys[binds.rollLeft] ? 1 : 0);
+  // Throttle: E = Throttle Up, Q = Throttle Down
+  if (keys[binds.throttleUp]) inp.throttle = Math.min(1, inp.throttle + dt * 0.6);
+  if (keys[binds.throttleDown]) inp.throttle = Math.max(-0.25, inp.throttle - dt * 0.6);
+  if (p.target && !p.target.targetable()) p.target = null;
+  p.wantBeam = null; p.wantPulse = false;
+  if (keys[binds.fire]) {
+    if (!p.target) autoTarget();
+    const t = p.target;
+    if (p.beam) {
+      if (t) {
+        p.wantBeam = t;
+        if (!p.beam.active && p.beam.charge > 0.25) {
+          if (p.pos.distanceTo(t.pos) > p.cls.beam.range + t.radius) warnOnce('range', 'Target out of phaser range.', '', 2);
+          else if (!p.mountsInArc('beam', t.pos).length) warnOnce('arc', 'Target outside phaser arc. Bring us about!', '', 2);
+        }
+      } else warnOnce('notgt', 'No target.', '', 2);
+    }
+    if (p.pulse) p.wantPulse = true;
+  }
+  if (p.pos.length() > ARENA) warnOnce('bounds', 'Captain, we are leaving the combat zone.', 'gold', 6);
+}
+function collide(dt) {
+  for (let i = 0; i < ships.length; i++) for (let j = i + 1; j < ships.length; j++) {
+    const a = ships[i], b = ships[j];
+    if (!a.alive || !b.alive || a.warp || b.warp) continue;
+    const d = new V3().subVectors(a.pos, b.pos), dist = d.length(), lim = a.colRadius + b.colRadius;
+    if (dist < lim && dist > 0.01) {
+      d.divideScalar(dist); const push = lim - dist;
+      a.pos.addScaledVector(d, push * 0.5); b.pos.addScaledVector(d, -push * 0.5);
+      a.drift.addScaledVector(d, 25); b.drift.addScaledVector(d, -25);
+      const dmg = 40 * dt + push * 0.4;
+      a.takeDamage(dmg, b.pos.clone(), a.pos.clone(), b, false); b.takeDamage(dmg, a.pos.clone(), b.pos.clone(), a, false);
+      if (a.isPlayer || b.isPlayer) warnOnce('col', 'Collision alert! Brace for impact!', 'red', 2);
+    }
+  }
+}
+function updateGame(dt) {
+  if (state === 'playing') updatePlayer(dt);
+  else if (player) { Object.assign(player.input, { yaw: 0, pitch: 0, roll: 0 }); player.wantBeam = null; player.wantPulse = false; }
+  for (let i = pending.length - 1; i >= 0; i--) if (gameTime >= pending[i].t) {
+    const s = warpInEnemy(pending[i].cls); pending.splice(i, 1);
+    if (!hailed[s.faction] && HAILS[s.faction]) {
+      hailed[s.faction] = true;
+      const col = s.faction === 'rom' || s.faction === 'brg' ? 'green' : s.faction === 'car' ? 'gold' : 'red';
+      setTimeout(() => { if (state === 'playing') log(`${s.name}: ${pick(HAILS[s.faction])}`, col); }, 1600);
+    }
+  }
+  for (const s of ships) { if (s.ai && s.alive && !s.warp) s.ai.update(dt); s.update(dt); }
+  collide(dt);
+  for (const p of projectiles) p.update(dt);
+  projectiles = projectiles.filter(p => { if (p.dead) p.dispose(); return !p.dead; });
+  ships = ships.filter(s => !s.removed || s.isPlayer);
+  if (!player) return;
+  if (player.alive && player.hull < player.hullMax * 0.25) warnOnce('hull', 'Hull integrity critical! Hull breaches on multiple decks!', 'red', 9);
+  if (endResult === null) {
+    const enemiesLeft = ships.some(s => s.side === 1 && s.alive) || pending.length > 0;
+    if (!player.alive) { endResult = 'lose'; endTimer = 4.5; state = 'ending'; banner('SHIP DESTROYED', 'ALL HANDS LOST', 4); }
+    else if (!enemiesLeft) {
+      if (mission.survival) { if (waveTimer < 0) { waveTimer = 4; log(`Wave ${wave} cleared! Damage control teams are making repairs...`, 'green'); } }
+      else { endResult = 'win'; endTimer = 4; state = 'ending'; banner('VICTORY', 'ALL HOSTILES ELIMINATED', 3.5, '#66dd66'); }
+    }
+    if (waveTimer >= 0) { waveTimer -= dt; if (waveTimer < 0) nextWave(); }
+  }
+  if (endTimer >= 0) { endTimer -= dt; if (endTimer < 0) showEnd(); }
+}
+
+/* =====================================================================
+   CAMERA
+   ===================================================================== */
+const camPos = new V3(0, 60, -200), camLook = new V3(), camUp = new V3(0, 1, 0), cinePos = new V3();
+let cineT = 0, camSnap = true, menuModel = null;
+function updateCamera(dt) {
+  if (state === 'menu' || state === 'loading') {
+    const R = menuModel ? menuModel.userData.r : 50, a = gameTime * 0.05;
+    camera.position.set(-R * 0.75 + Math.sin(a) * R * 0.3, R * 0.6, R * 2.4);
+    camera.up.set(0, 1, 0); camera.lookAt(-R * 0.95, -R * 0.05, 0);
+    return;
+  }
+  const p = player; if (!p) return;
+  if (!dragging && performance.now() - lastDrag > 2500) { camYaw *= 1 - damp(2, dt); camPitch *= 1 - damp(2, dt); }
+  const R = p.radius, des = new V3(), look = new V3(), up = new V3(0, 1, 0);
+  let snap = false;
+  if (!p.alive) {
+    const a = gameTime * 0.15; des.set(Math.cos(a) * R * 6, R * 2, Math.sin(a) * R * 6).add(p.pos); look.copy(p.pos);
+  } else if (camMode === 1 && p.target && p.target.targetable()) {
+    const back = _t1.subVectors(p.pos, p.target.pos).normalize();
+    des.copy(p.pos).addScaledVector(back, R * 2.6 * camZoom).addScaledVector(p.u, R * 0.8 * camZoom);
+    look.lerpVectors(p.pos, p.target.pos, 0.3); up.copy(p.u);
+  } else if (camMode === 2) {
+    cineT -= dt;
+    if (cineT <= 0 || cinePos.distanceTo(p.pos) > R * 16) { cineT = 7; cinePos.copy(p.pos).addScaledVector(p.f, R * 8).addScaledVector(randDir(), R * 3.5); snap = true; }
+    des.copy(cinePos); look.copy(p.pos);
+  } else {
+    const off = new V3(0, R * 0.55, -R * 2.4).multiplyScalar(camZoom).applyEuler(_e.set(camPitch, camYaw, 0, 'YXZ'));
+    des.copy(off).applyQuaternion(p.quat).add(p.pos);
+    look.copy(p.pos).addScaledVector(p.f, R * 1.2).addScaledVector(p.u, R * 0.2); up.copy(p.u);
+  }
+  if (camSnap || snap) { camPos.copy(des); camLook.copy(look); camUp.copy(up); camSnap = false; }
+  else { camPos.lerp(des, damp(camMode === 0 ? 7 : 4, dt)); camLook.lerp(look, damp(10, dt)); camUp.lerp(up, damp(4, dt)).normalize(); }
+  camera.position.copy(camPos);
+  if (shake > 0.001) { camera.position.addScaledVector(randDir(), shake * R * 0.06); shake = Math.max(0, shake - dt * 2.5); }
+  camera.up.copy(camUp); camera.lookAt(camLook);
+}
+
+/* =====================================================================
+   MENU
+   ===================================================================== */
+function showMenuModel() {
+  hideMenuModel();
+  const c = CLASSES[selShip], M = c.build();
+  M.group.scale.setScalar(c.scale); M.group.rotation.y = -0.6;
+  M.group.userData.M = M; M.group.userData.r = M.shield.r.z * c.scale;
+  menuModel = M.group; scene.add(menuModel);
+  renderShipInfo();
+}
+function hideMenuModel() { if (menuModel) scene.remove(menuModel); menuModel = null; }
+function updateMenu(dt) {
+  gameTime += dt;
+  if (!menuModel) return;
+  menuModel.rotation.y += dt * 0.22;
+  const M = menuModel.userData.M;
+  M.blinkers.forEach(b => b.visible = ((gameTime + b.userData.phase) % 1.6) < 0.14);
+  M.engines.forEach(e => e.scale.setScalar(e.userData.base * (0.75 + Math.random() * 0.1)));
+}
+function firepower(c) {
+  const b = c.beam ? c.beam.dps * c.beam.dur / (c.beam.dur + c.beam.recharge) : 0;
+  const p = c.pulse ? c.pulse.dmg / c.pulse.interval * (c.pulse.regen / (c.pulse.cost / c.pulse.interval + c.pulse.regen)) : 0;
+  return b + p + c.torp.dmg * (c.torp.salvo || 1) / c.torp.reload;
+}
+function renderShipInfo() {
+  const c = CLASSES[selShip];
+  const bar = (label, f) => `<div class="stat"><span>${label}</span><div class="bar"><div style="width:${clamp(f, 0.05, 1) * 100}%"></div></div></div>`;
+  const maxFP = Math.max(...PLAYER_SHIPS.map(id => firepower(CLASSES[id])));
+  $('shipinfo').innerHTML = `<div class="n">${c.registry.toUpperCase()}</div><div class="c">${c.name.toUpperCase()} · ${c.sub.toUpperCase()}</div>
+    <table>${c.info.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('')}</table>
+    <p style="font-size:13px;color:#ccb;margin:8px 0;letter-spacing:.4px;line-height:1.35">${c.blurb}</p>
+    ${bar('HULL', c.hull / 2000)}${bar('SHIELDS', c.shield / 940)}${bar('SPEED', c.speed / 165)}${bar('AGILITY', c.turn / 1.3)}${bar('FIREPOWER', firepower(c) / maxFP)}`;
+}
+function buildMenu() {
+  $('ship-cards').innerHTML = SHIP_CATEGORIES.map(cat =>
+    `<div class="cat-h">${cat.title}</div><div class="cards">${cat.ships.map(id =>
+      `<div class="card" data-id="${id}"><div class="n">${CLASSES[id].name.replace(' Class', '').toUpperCase()}</div><div class="c">${CLASSES[id].registry.split(' ').slice(-1)[0]}</div></div>`
+    ).join('')}</div>`
+  ).join('');
+  $('mission-list').innerHTML = MISSIONS.map((m, i) => `<div class="mission" data-i="${i}"><div class="n">${String(i + 1).padStart(2, '0')} · ${m.name}</div><div class="d">${m.desc}</div></div>`).join('');
+  $('diff-list').innerHTML = DIFF.map((d, i) => `<div class="pill" data-i="${i}">${d.name}</div>`).join('');
+  const refresh = () => {
+    document.querySelectorAll('.card').forEach(e => e.classList.toggle('sel', e.dataset.id === selShip));
+    document.querySelectorAll('.mission').forEach(e => e.classList.toggle('sel', +e.dataset.i === selMission));
+    document.querySelectorAll('.pill').forEach(e => e.classList.toggle('sel', +e.dataset.i === difficulty));
+  };
+  document.querySelectorAll('.card').forEach(e => e.onclick = () => { selShip = e.dataset.id; sfx.init(); sfx.beep(); refresh(); showMenuModel(); });
+  document.querySelectorAll('.mission').forEach(e => e.onclick = () => { selMission = +e.dataset.i; sfx.init(); sfx.beep(1100); refresh(); });
+  document.querySelectorAll('.pill').forEach(e => e.onclick = () => { difficulty = +e.dataset.i; sfx.init(); sfx.beep(900); refresh(); });
+  const syncInvert = val => { invertPitch = val; $('opt-invert').checked = val; $('opt-invert-pause').checked = val; };
+  $('opt-invert').onchange = e => syncInvert(e.target.checked);
+  $('opt-invert-pause').onchange = e => syncInvert(e.target.checked);
+  $('btn-reset-keys').onclick = () => { binds = { ...DEFAULT_BINDS }; rebindingKey = null; sfx.init(); sfx.beep(950); saveBinds(); };
+  $('btn-start').onclick = startMission;
+  $('btn-help').onclick = () => showHelp(false);
+  $('btn-resume').onclick = resume;
+  $('btn-abandon').onclick = goMenu;
+  $('btn-retry').onclick = startMission;
+  $('btn-menu').onclick = goMenu;
+  $('stardate').textContent = `STARDATE ${(41000 + Math.random() * 8000).toFixed(1)}`;
+  renderKeybindUI();
+  updateHudKeyHints();
+  refresh();
+}
+function showHelp(inGame) {
+  rebindingKey = null;
+  renderKeybindUI();
+  $('help').classList.remove('hidden');
+  $('btn-abandon').classList.toggle('hidden', !inGame);
+  $('help-title').textContent = inGame ? 'PAUSED · CONTROLS & TACTICAL BRIEFING' : 'CONTROLS & TACTICAL BRIEFING';
+  $('btn-resume').textContent = inGame ? 'RESUME' : 'CLOSE';
+}
+function resume() { rebindingKey = null; $('help').classList.add('hidden'); if (state === 'paused') state = 'playing'; }
+
+/* =====================================================================
+   INPUT
+   ===================================================================== */
+addEventListener('keydown', e => {
+  if (rebindingKey) {
+    e.preventDefault();
+    if (e.code !== 'Escape') binds[rebindingKey] = e.code;
+    rebindingKey = null;
+    sfx.init(); sfx.beep(1500);
+    saveBinds();
+    return;
+  }
+  if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  keys[e.code] = true;
+  if (e.repeat) return;
+  sfx.init();
+  if (state === 'playing' || state === 'ending') {
+    if (e.code === binds.cycleTarget) cycleTarget();
+    else if (e.code === binds.nearestTarget) autoTarget(true);
+    else if (e.code === binds.torpedo || e.code === 'KeyF') playerTorpedo();
+    else if (e.code === binds.special) toggleSpecial();
+    else if (e.code === binds.camera) { camMode = (camMode + 1) % 3; camSnap = true; log(`Camera: ${['CHASE', 'TARGET LOCK', 'CINEMATIC'][camMode]}`); }
+    else if (e.code === binds.allStop) { if (player) { player.input.throttle = 0; log('All stop.'); } }
+    else if (e.code === binds.autoLevel) { if (player) { player.autoLevel = !player.autoLevel; log(`Auto-level ${player.autoLevel ? 'engaged' : 'disengaged'}.`); } }
+    else {
+      switch (e.code) {
+        case 'Digit1': setPower('bal'); break; case 'Digit2': setPower('wep'); break;
+        case 'Digit3': setPower('shd'); break; case 'Digit4': setPower('eng'); break;
+        case 'KeyM': log(sfx.toggleMute() ? 'Audio muted.' : 'Audio on.'); break;
+        case 'KeyH': case 'Escape': if (state === 'playing') { state = 'paused'; showHelp(true); } break;
+      }
+    }
+  } else if (state === 'paused') { if (e.code === 'KeyH' || e.code === 'Escape') resume(); }
+  else if (state === 'menu') {
+    if (e.code === 'Escape' && !$('help').classList.contains('hidden')) resume();
+    else if (e.code === 'Enter' && $('help').classList.contains('hidden')) startMission();
+  }
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+canvas.addEventListener('mousedown', e => {
+  sfx.init();
+  if (e.button === 0) dragging = { x: e.clientX, y: e.clientY, moved: false };
+  else if (e.button === 2) playerTorpedo();
+});
+addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const dx = e.clientX - dragging.x, dy = e.clientY - dragging.y;
+  if (!dragging.moved && Math.abs(dx) + Math.abs(dy) > 5) dragging.moved = true;
+  if (dragging.moved) {
+    camYaw -= dx * 0.006; camPitch = clamp(camPitch + dy * 0.004, -1.2, 1.2);
+    dragging.x = e.clientX; dragging.y = e.clientY; lastDrag = performance.now();
+  }
+});
+addEventListener('mouseup', e => {
+  if (e.button !== 0 || !dragging) return;
+  if (!dragging.moved && state === 'playing') clickSelect(e.clientX, e.clientY);
+  dragging = null;
+});
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('wheel', e => { camZoom = clamp(camZoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.5, 3); }, { passive: true });
+
+/* =====================================================================
+   HUD, RADAR & TARGETING OVERLAY
+   ===================================================================== */
+function project(v) {
+  const behind = _t4.subVectors(v, camera.position).dot(camera.getWorldDirection(_t3)) < 0;
+  const p = _t5.copy(v).project(camera);
+  return { x: (p.x * 0.5 + 0.5) * innerWidth, y: (-p.y * 0.5 + 0.5) * innerHeight, behind };
+}
+function setBar(id, f, color) { const el = $(id); el.style.width = (clamp(f, 0, 1) * 100).toFixed(1) + '%'; if (color) el.style.background = color; }
+const hullColor = f => f > 0.6 ? '#ff9c00' : f > 0.3 ? '#ffcc66' : '#ff4433';
+function throttleLabel(t) {
+  if (t < -0.01) return 'REVERSE IMPULSE'; if (t < 0.02) return 'ALL STOP';
+  if (t < 0.3) return '1/4 IMPULSE'; if (t < 0.55) return '1/2 IMPULSE'; if (t < 0.8) return '3/4 IMPULSE'; return 'FULL IMPULSE';
+}
+function drawSilhouette(g, s, k) {
+  g.beginPath();
+  const id = s.cls.id;
+  if (id === 'borgcube') { g.fillRect(-k * 0.68, -k * 0.68, k * 1.36, k * 1.36); g.strokeRect(-k * 0.68, -k * 0.68, k * 1.36, k * 1.36); return; }
+  if (id === 'defiant' || id === 'nova') { g.moveTo(0, -k); g.lineTo(k * 0.6, -k * 0.3); g.lineTo(k * 0.65, k * 0.8); g.lineTo(-k * 0.65, k * 0.8); g.lineTo(-k * 0.6, -k * 0.3); g.closePath(); g.fill(); g.stroke(); return; }
+  if (id === 'prometheus' || id === 'intrepid') { g.moveTo(0, -k); g.lineTo(k * 0.55, 0); g.lineTo(k * 0.35, k * 0.9); g.lineTo(-k * 0.35, k * 0.9); g.lineTo(-k * 0.55, 0); g.closePath(); g.fill(); g.stroke(); return; }
+  if (id === 'freedom') {
+    g.ellipse(0, -k * 0.35, k * 0.55, k * 0.48, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillRect(-k * 0.12, -k * 0.05, k * 0.24, k * 1.0); g.strokeRect(-k * 0.12, -k * 0.05, k * 0.24, k * 1.0);
+    return;
+  }
+  if (s.faction === 'fed') {
+    const gal = id === 'galaxy' || id === 'kirov';
+    g.ellipse(0, -k * 0.45, k * (gal ? 0.62 : 0.5), k * (gal ? 0.48 : 0.5), 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillRect(-k * 0.12, -k * 0.1, k * 0.24, k * 0.9); g.strokeRect(-k * 0.12, -k * 0.1, k * 0.24, k * 0.9);
+    for (const sx of [-1, 1]) { g.fillRect(sx * k * 0.45 - k * 0.07, k * 0.05, k * 0.14, k * 0.95); g.strokeRect(sx * k * 0.45 - k * 0.07, k * 0.05, k * 0.14, k * 0.95); }
+    return;
+  }
+  if (s.faction === 'kli' || s.faction === 'car' || s.faction === 'dom') { g.ellipse(0, -k * 0.8, k * 0.18, k * 0.2, 0, 0, Math.PI * 2); g.fill(); g.stroke(); g.beginPath(); g.moveTo(0, -k * 0.6); g.lineTo(k * 0.12, -k * 0.1); g.lineTo(k, k * 0.35); g.lineTo(k * 0.9, k * 0.55); g.lineTo(0, k * 0.5); g.lineTo(-k * 0.9, k * 0.55); g.lineTo(-k, k * 0.35); g.lineTo(-k * 0.12, -k * 0.1); g.closePath(); g.fill(); g.stroke(); return; }
+  g.moveTo(0, -k); g.lineTo(k * 0.2, -k * 0.4); g.lineTo(k, k * 0.4); g.lineTo(k * 0.7, k * 0.7); g.lineTo(0, k * 0.6); g.lineTo(-k * 0.7, k * 0.7); g.lineTo(-k, k * 0.4); g.lineTo(-k * 0.2, -k * 0.4); g.closePath(); g.fill(); g.stroke();
+}
+function drawShields(cv, s) {
+  const g = cv.getContext('2d'), W = cv.width, H = cv.height, cx = W / 2, cy = H / 2;
+  g.clearRect(0, 0, W, H);
+  g.save(); g.translate(cx, cy); g.fillStyle = '#34344a'; g.strokeStyle = '#8888aa'; g.lineWidth = 1; drawSilhouette(g, s, Math.min(W, H) * 0.3); g.restore();
+  const rx = W * 0.42, ry = H * 0.43, centers = [-Math.PI / 2, 0, Math.PI / 2, Math.PI], up = s.cloakLevel < 0.3 && s.alive;
+  g.font = '13px Antonio, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (let f = 0; f < 4; f++) {
+    const r = s.shields[f] / s.shieldMax;
+    const col = r > 0.6 ? '#66bbff' : r > 0.3 ? '#ffcc66' : '#ff5544';
+    g.strokeStyle = '#1c1c2a'; g.lineWidth = 9; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, centers[f] - 0.66, centers[f] + 0.66); g.stroke();
+    if (up && r > 0) { const h = 0.66 * Math.max(0.06, r); g.strokeStyle = col; g.lineWidth = 7; g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, centers[f] - h, centers[f] + h); g.stroke(); }
+    g.fillStyle = !up ? '#667' : r <= 0 ? '#ff5544' : '#ffcc99';
+    g.fillText(!up ? '--' : r <= 0 ? 'DOWN' : Math.round(r * 100) + '%', cx + Math.cos(centers[f]) * (rx - 24), cy + Math.sin(centers[f]) * (ry - 17));
+  }
+  if (s.cloakLevel > 0) { g.fillStyle = '#88ff99'; g.fillText('CLOAKED', cx, cy); }
+}
+function updateHUD() {
+  const p = player; if (!p || frameNo % 2) return;
+  const hf = p.hull / p.hullMax; setBar('hull-bar', hf, hullColor(hf)); $('hull-txt').textContent = Math.ceil(hf * 100) + '%';
+  drawShields($('shield-canvas'), p);
+  for (const [k, id] of [['weapons', 'sys-phasers'], ['torps', 'sys-torpedoes'], ['engines', 'sys-engines'], ['shields', 'sys-shields']]) {
+    const v = p.systems[k], el = $(id); el.className = 'sys' + (v < 0.35 ? ' crit' : v < 0.75 ? ' warn' : ''); el.lastChild.textContent = Math.round(v * 100) + '%';
+  }
+  const pm = POWER[p.power];
+  setBar('pw-w', pm.w / 1.6, '#ff9c00'); setBar('pw-s', pm.s / 1.6, '#66bbff'); setBar('pw-e', pm.e / 1.6, '#cc99cc'); $('pw-mode').textContent = pm.label;
+  setBar('thr-bar', Math.abs(p.input.throttle), p.input.throttle < 0 ? '#cc5555' : '#cc99cc');
+  $('spd-txt').textContent = Math.round(Math.abs(p.speed)); $('thr-txt').textContent = throttleLabel(p.input.throttle) + (p.autoLevel ? '' : ' · MANUAL ROLL');
+  if (p.beam) setBar('w1-bar', p.beam.charge, p.beam.active ? '#ffffff' : p.beam.charge > 0.25 ? '#9999ff' : '#555577');
+  else setBar('w1-bar', p.pulse.energy, p.wantPulse ? '#ffffff' : p.pulse.energy > p.cls.pulse.cost ? '#9999ff' : '#555577');
+  setBar('w2-bar', p.torp.ready, p.torp.ready >= 1 && p.torp.ammo > 0 ? '#66ccff' : '#555577'); $('w2-ammo').textContent = p.torp.ammo;
+  const t = p.target;
+  if (t && t.targetable()) {
+    const d = p.pos.distanceTo(t.pos);
+    const wArc = p.beam ? p.mountsInArc('beam', t.pos).length > 0 && d < p.cls.beam.range + t.radius : p.f.angleTo(_t1.subVectors(t.pos, p.pos)) < p.M.mounts.pulse[0].arc;
+    const tArc = p.mountsInArc('torp', t.pos).length > 0;
+    $('arc-txt').innerHTML = `<span style="color:${wArc ? '#8f8' : '#f86'}">${p.beam ? 'PHASERS' : 'CANNONS'} ${wArc ? 'IN ARC' : 'NO SOLUTION'}</span> · <span style="color:${tArc ? '#8f8' : '#f86'}">TORP ${tArc ? 'READY ARC' : 'OUT OF ARC'}</span>`;
+    $('tgt-name').textContent = t.name.toUpperCase(); $('tgt-class').textContent = `${t.cls.name} · ${t.cls.sub}`.toUpperCase();
+    const th = t.hull / t.hullMax; setBar('tgt-hull', th, hullColor(th)); $('tgt-hull-txt').textContent = Math.ceil(th * 100) + '%';
+    drawShields($('tgt-canvas'), t);
+    const ff = t.facingOf(p.pos);
+    $('tgt-info').textContent = `RANGE ${Math.round(d)} · FACING YOU: ${FACING_NAMES[ff]} ${t.cloakState === 'decloaking' ? '· DECLOAKING' : ''}`;
+  } else {
+    $('arc-txt').textContent = `NO TARGET · ${keyLabel(binds.cycleTarget)} / ${keyLabel(binds.nearestTarget)} / CLICK TO LOCK`;
+    $('tgt-name').textContent = 'NO TARGET'; $('tgt-class').textContent = `PRESS ${keyLabel(binds.cycleTarget)} OR ${keyLabel(binds.nearestTarget)} TO LOCK`; setBar('tgt-hull', 0); $('tgt-hull-txt').textContent = '';
+    const g = $('tgt-canvas').getContext('2d'); g.clearRect(0, 0, 300, 300); $('tgt-info').textContent = `${hostilesOf(p).length} HOSTILE CONTACTS`;
+  }
+  drawRadar();
+}
+function drawRadar() {
+  const cv = $('radar'), g = cv.getContext('2d'), W = cv.width, c = W / 2, R = c - 6, RANGE = 2600, p = player;
+  g.clearRect(0, 0, W, W);
+  g.fillStyle = 'rgba(0,0,12,0.6)'; g.beginPath(); g.arc(c, c, R, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = 'rgba(255,156,0,0.35)'; g.lineWidth = 1;
+  for (const k of [1 / 3, 2 / 3, 1]) { g.beginPath(); g.arc(c, c, R * k, 0, Math.PI * 2); g.stroke(); }
+  g.beginPath(); g.moveTo(c - R, c); g.lineTo(c + R, c); g.moveTo(c, c - R); g.lineTo(c, c + R); g.stroke();
+  g.fillStyle = 'rgba(255,156,0,0.06)'; g.beginPath(); g.moveTo(c, c); g.arc(c, c, R, -Math.PI / 2 - 0.6, -Math.PI / 2 + 0.6); g.closePath(); g.fill();
+  if (!p) return;
+  const sc = R / RANGE, plot = (pos) => {
+    const l = p.toLocal(pos, new V3()); let x = -l.x * sc, y = -l.z * sc; const len = Math.hypot(x, y);
+    if (len > R) { x *= R / len; y *= R / len; }
+    return [c + x, c + y, clamp(-l.y * sc * 0.6, -30, 30)];
+  };
+  for (const pr of projectiles) {
+    if (pr.kind !== 'torp') continue; const [x, y, e] = plot(pr.pos);
+    g.fillStyle = pr.side === p.side ? '#88ccff' : '#ff8844'; g.fillRect(x - 1.5, y + e - 1.5, 3, 3);
+  }
+  for (const s of ships) {
+    if (s === p || !s.alive || s.warp || (s.side !== p.side && s.cloakLevel >= 0.6)) continue;
+    const [x, y, e] = plot(s.pos), col = s.side === p.side ? '#66bbff' : '#ff5544';
+    g.strokeStyle = col; g.fillStyle = col; g.globalAlpha = s.cloakLevel > 0 ? 0.4 : 1;
+    g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + e); g.stroke();
+    g.beginPath(); g.arc(x, y + e, s.radius > 50 ? 5 : 3.5, 0, Math.PI * 2); g.fill();
+    if (s === p.target) { g.strokeStyle = '#ff9c00'; g.lineWidth = 2; g.beginPath(); g.arc(x, y + e, 8, 0, Math.PI * 2); g.stroke(); g.lineWidth = 1; }
+    g.globalAlpha = 1;
+  }
+  g.fillStyle = '#ffcc99'; g.beginPath(); g.moveTo(c, c - 7); g.lineTo(c + 5, c + 5); g.lineTo(c - 5, c + 5); g.closePath(); g.fill();
+}
+function brackets(g, x, y, r, col, lw) {
+  const l = Math.max(5, r * 0.35); g.strokeStyle = col; g.lineWidth = lw; g.beginPath();
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { g.moveTo(x + sx * r, y + sy * (r - l)); g.lineTo(x + sx * r, y + sy * r); g.lineTo(x + sx * (r - l), y + sy * r); }
+  g.stroke();
+}
+function drawOverlay(dt) {
+  const g = octx, W = innerWidth, H = innerHeight;
+  g.clearRect(0, 0, overlay.width, overlay.height);
+  hurtFlash = Math.max(0, hurtFlash - dt * 1.4);
+  if (!player || !['playing', 'paused', 'ending'].includes(state)) return;
+  const low = player.alive && player.hull < player.hullMax * 0.25 ? 0.25 + 0.15 * Math.sin(gameTime * 6) : 0;
+  $('vignette').style.opacity = clamp(hurtFlash * 0.8 + low, 0, 0.9);
+  const focal = (H / 2) / Math.tan(camera.fov * DEG / 2);
+  g.font = '13px Antonio, sans-serif'; g.textAlign = 'center';
+  if (player.alive) {
+    const r = project(_t1.copy(player.pos).addScaledVector(player.f, 900));
+    if (!r.behind) {
+      g.strokeStyle = 'rgba(255,204,153,0.75)'; g.lineWidth = 1.5;
+      for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(r.x, r.y, 16, i * Math.PI / 2 + 0.25, (i + 1) * Math.PI / 2 - 0.25); g.stroke(); }
+      g.beginPath(); g.moveTo(r.x - 26, r.y); g.lineTo(r.x - 20, r.y); g.moveTo(r.x + 20, r.y); g.lineTo(r.x + 26, r.y); g.stroke();
+      g.fillStyle = 'rgba(255,204,153,0.9)'; g.fillRect(r.x - 1, r.y - 1, 2, 2);
+    }
+  }
+  for (const s of ships) {
+    if (s === player || !s.alive || s.warp || s.cloakLevel >= 0.6) continue;
+    const hostile = s.side !== player.side, isT = s === player.target, col = isT ? '#ff9c00' : hostile ? '#ff5544' : '#66bbff';
+    const pr = project(s.pos), dist = s.pos.distanceTo(camera.position), rad = Math.max(12, s.radius * focal / dist * 0.85);
+    const on = !pr.behind && pr.x > 0 && pr.x < W && pr.y > 0 && pr.y < H;
+    if (on) {
+      brackets(g, pr.x, pr.y, isT ? rad * (1.08 + 0.04 * Math.sin(gameTime * 8)) : rad, col, isT ? 2.5 : 1.2);
+      g.fillStyle = col; const dp = Math.round(s.pos.distanceTo(player.pos));
+      if (isT || dp < 1600) g.fillText(`${s.name.toUpperCase()} · ${dp}`, pr.x, pr.y - rad - 8);
+      const hw = Math.min(60, rad); g.fillStyle = 'rgba(30,30,40,0.8)'; g.fillRect(pr.x - hw, pr.y + rad + 6, hw * 2, 4);
+      g.fillStyle = hullColor(s.hull / s.hullMax); g.fillRect(pr.x - hw, pr.y + rad + 6, hw * 2 * s.hull / s.hullMax, 4);
+      if (isT && player.alive) {
+        const lp = project(leadPoint(player.pos, s, player.cls.torp.speed));
+        if (!lp.behind) { g.strokeStyle = '#ffcc66'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(lp.x, lp.y - 7); g.lineTo(lp.x + 7, lp.y); g.lineTo(lp.x, lp.y + 7); g.lineTo(lp.x - 7, lp.y); g.closePath(); g.stroke(); }
+      }
+    } else {
+      let dx = pr.x - W / 2, dy = pr.y - H / 2; if (pr.behind) { dx = -dx; dy = -dy; }
+      const a = Math.atan2(dy, dx), ca = Math.cos(a), sa = Math.sin(a);
+      const t = Math.min((W / 2 - 40) / Math.max(1e-3, Math.abs(ca)), (H / 2 - 40) / Math.max(1e-3, Math.abs(sa)));
+      const ex = W / 2 + ca * t, ey = H / 2 + sa * t;
+      g.save(); g.translate(ex, ey); g.rotate(a); g.fillStyle = col; g.globalAlpha = isT ? 1 : 0.75;
+      g.beginPath(); g.moveTo(14, 0); g.lineTo(-6, -9); g.lineTo(-6, 9); g.closePath(); g.fill(); g.restore();
+      if (isT) { g.fillStyle = col; g.fillText(`${Math.round(s.pos.distanceTo(player.pos))}`, ex - ca * 24, ey - sa * 24 + 4); }
+    }
+  }
+}
+
+/* =====================================================================
+   MAIN LOOP
+   ===================================================================== */
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h); composer.setSize(w, h); bloom.setSize(w, h);
+  camera.aspect = w / h; camera.updateProjectionMatrix();
+  overlay.width = w; overlay.height = h;
+  particles.mat.uniforms.uScale.value = h * renderer.getPixelRatio() / (2 * Math.tan(camera.fov * DEG / 2));
+}
+addEventListener('resize', resize);
+const clock = new THREE.Clock();
+function loop() {
+  requestAnimationFrame(loop);
+  let dt = Math.min(clock.getDelta(), 0.05);
+  if (state === 'paused') dt = 0;
+  if (state === 'playing' || state === 'ending' || state === 'over') { gameTime += dt; updateGame(dt); }
+  else if (state === 'menu') updateMenu(dt);
+  particles.update(dt);
+  if (dt > 0) fxList = fxList.filter(f => f.update(dt));
+  updateCamera(dt); updateEnv(dt);
+  composer.render();
+  drawOverlay(dt);
+  if (state === 'playing' || state === 'ending') updateHUD();
+  frameNo++;
+}
+resize(); buildMenu(); goMenu();
+window.__gameReady = true; $('loading').remove();
+loop();
+</script>
+</body>
+</html>
